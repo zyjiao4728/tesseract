@@ -65,6 +65,8 @@ public:
 
   ~SRDFModel() {}
 
+  
+
   /// \brief Load Model from TiXMLElement
   bool initXml(const tesseract_scene_graph::SceneGraph& scene_graph, TiXmlElement* srdf_xml)
   {
@@ -310,6 +312,11 @@ public:
     link_sphere_approximations_.clear();
     disabled_collisions_.clear();
     passive_joints_.clear();
+  }
+
+  void addGroup(Group group)
+  {
+    groups_.push_back(group);
   }
 
 private:

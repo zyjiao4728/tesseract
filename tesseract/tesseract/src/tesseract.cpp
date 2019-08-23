@@ -66,7 +66,7 @@ bool Tesseract::init(tesseract_scene_graph::SceneGraph::Ptr scene_graph)
 }
 
 bool Tesseract::init(tesseract_scene_graph::SceneGraph::Ptr scene_graph,
-                     tesseract_scene_graph::SRDFModel::ConstPtr srdf_model)
+                     tesseract_scene_graph::SRDFModel::Ptr srdf_model)
 {
   clear();
 
@@ -238,7 +238,7 @@ const tesseract_environment::Environment::ConstPtr& Tesseract::getEnvironmentCon
   return environment_const_;
 }
 
-const tesseract_scene_graph::SRDFModel::ConstPtr& Tesseract::getSRDFModel() const { return srdf_model_; }
+tesseract_scene_graph::SRDFModel::Ptr& Tesseract::getSRDFModel() { return srdf_model_; }
 
 const ForwardKinematicsManager::Ptr& Tesseract::getFwdKinematicsManager() { return fwd_kin_manager_; }
 
@@ -420,4 +420,13 @@ void Tesseract::clear()
   inv_kin_manager_ = nullptr;
   fwd_kin_manager_ = nullptr;
 }
+
+void Tesseract::clearKinematics()
+{
+  inv_kin_manager_ = nullptr;
+  fwd_kin_manager_ = nullptr;
+  fwd_kin_manager_const_ = nullptr;
+  inv_kin_manager_const_ = nullptr;
+}
+
 }  // namespace tesseract
