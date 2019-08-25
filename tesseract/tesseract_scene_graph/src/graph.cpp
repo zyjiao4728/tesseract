@@ -86,6 +86,15 @@ Link::ConstPtr SceneGraph::getLink(const std::string& name) const
   return found->second.first;
 }
 
+Link::Ptr SceneGraph::getEditableLink(const std::string& name)
+{
+  auto found = link_map_.find(name);
+  if (found == link_map_.end())
+    return nullptr;
+
+  return found->second.first;
+}
+
 std::vector<Link::ConstPtr> SceneGraph::getLinks() const
 {
   std::vector<Link::ConstPtr> links;
