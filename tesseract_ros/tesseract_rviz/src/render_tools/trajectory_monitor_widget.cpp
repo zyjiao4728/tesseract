@@ -195,6 +195,7 @@ void TrajectoryMonitorWidget::clearTrajectoryTrail()
 
 void TrajectoryMonitorWidget::createTrajectoryTrail()
 {
+  // ROS_ERROR("Create trajectory trails");
   clearTrajectoryTrail();
 
   tesseract_msgs::TrajectoryPtr t = trajectory_message_to_display_;
@@ -219,10 +220,15 @@ void TrajectoryMonitorWidget::createTrajectoryTrail()
     std::unordered_map<std::string, double> joints;
     for (unsigned j = 0; j < t->joint_trajectory.joint_names.size(); ++j)
     {
+      // if(i == num_trajectory_waypoints_ - 1)
+      // {
+      //   ROS_WARN((t->joint_trajectory.joint_names[j] + ":\t" + std::to_string(t->joint_trajectory.points[waypoint_i].positions[j])).c_str());
+      // }
       joints[t->joint_trajectory.joint_names[j]] = t->joint_trajectory.points[waypoint_i].positions[j];
     }
 
     states_data.push_back(tesseract_->getEnvironment()->getState(joints));
+    // std::cout << "drawer0_base_drawer_joint: " << states_data.back()->joints["drawer0_base_drawer_joint"] << std::endl;
   }
 
   // If current state is not visible must set trajectory for all links for a single state so static
@@ -245,6 +251,7 @@ void TrajectoryMonitorWidget::createTrajectoryTrail()
     {
       link_trajectory.push_back(state->transforms[link_name]);
     }
+    // std::cout << link_name << ":\t" << std::endl << link_trajectory.back().translation() << std::endl << link_trajectory.back().linear() << std::endl;
     visualization_->getLink(link_name)->setTrajectory(link_trajectory);
   }
 }
@@ -462,14 +469,17 @@ void TrajectoryMonitorWidget::incomingDisplayTrajectory(const tesseract_msgs::Tr
              tesseract_->getEnvironment()->getName().c_str());
 
   if (!msg->joint_trajectory.points.empty())
-  {
+  {       
+
     bool joints_equal = true;
     if (trajectory_message_to_display_)
-    {
+    {        
+
       if ((trajectory_message_to_display_->joint_trajectory.points.size() == msg->joint_trajectory.points.size()) &&
           (trajectory_message_to_display_->joint_trajectory.joint_names.size() ==
            msg->joint_trajectory.joint_names.size()))
-      {
+      {       
+
         for (unsigned i = 0; i < msg->joint_trajectory.points.size(); ++i)
         {
           for (unsigned j = 0; j < msg->joint_trajectory.joint_names.size(); ++j)
@@ -481,14 +491,16 @@ void TrajectoryMonitorWidget::incomingDisplayTrajectory(const tesseract_msgs::Tr
         }
       }
       else
-      {
+      {        
+
         joints_equal = false;
       }
     }
 
     trajectory_message_to_display_.reset();
     if (!msg->joint_trajectory.points.empty() || !joints_equal)
-    {
+    {      
+
       boost::mutex::scoped_lock lock(update_trajectory_message_);
       trajectory_message_to_display_.reset(new tesseract_msgs::Trajectory(*msg));
       if (interrupt_display_property_->getBool())
@@ -496,7 +508,8 @@ void TrajectoryMonitorWidget::incomingDisplayTrajectory(const tesseract_msgs::Tr
     }
   }
   else
-  {
+  {       
+
     trajectory_message_to_display_.reset();
   }
 }

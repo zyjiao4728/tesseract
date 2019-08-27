@@ -180,6 +180,8 @@ bool KDLStateSolver::setJointValuesHelper(KDL::JntArray& q,
   if (qnr != joint_to_qnr_.end())
   {
     q(qnr->second) = joint_value;
+    // std::cout << joint_name << ":\t" << joint_value << std::endl;
+    // std::cout << qnr->second << std::endl;
     return true;
   }
   else
@@ -197,12 +199,35 @@ void KDLStateSolver::calculateTransformsHelper(tesseract_common::TransformMap& t
   if (it != kdl_tree_->getSegments().end())
   {
     const KDL::TreeElementType& current_element = it->second;
-    KDL::Frame current_frame = GetTreeElementSegment(current_element).pose(q_in(GetTreeElementQNr(current_element)));
+
+    auto qnr = joint_to_qnr_.find(current_element.segment.getJoint().getName());
+    unsigned int joint_idx = 0;
+    if (qnr == joint_to_qnr_.end())
+    {
+      // ROS_ERROR("Cannot find joint %s for link %s.",current_element.segment.getJoint().getName().c_str(), current_element.segment.getName().c_str());
+      joint_idx = GetTreeElementQNr(current_element);
+    }
+    else{
+      joint_idx = qnr->second;
+    }
+    
+    KDL::Frame current_frame = GetTreeElementSegment(current_element).pose(q_in(joint_idx));
 
     Eigen::Isometry3d local_frame, global_frame;
     KDLToEigen(current_frame, local_frame);
     global_frame = parent_frame * local_frame;
     transforms[current_element.segment.getName()] = global_frame;
+    // if (current_element.segment.getName() == "door0_base_link")
+    //   {
+    //     std::cout << current_element.segment.getJoint().getName() << std::endl;
+    //     std::cout << q_in.data << std::endl;
+    //     std::cout << GetTreeElementQNr(current_element) << std::endl;
+    //     std::cout << "current q_in:\t" << q_in(GetTreeElementQNr(current_element)) << std::endl;
+    //     std::cout << parent_frame.translation() << std::endl;
+    //     std::cout << parent_frame.linear() << std::endl;
+    //     std::cout << global_frame.translation() << std::endl;
+    //     std::cout << global_frame.linear() << std::endl;
+    //   }
 
     for (auto& child : current_element.children)
     {
