@@ -1177,7 +1177,7 @@ static inline void toMsg(trajectory_msgs::JointTrajectory& traj_msg,
         traj_msg.joint_names[static_cast<size_t>(j)] = joint.first;
         jn_to_index[joint.first] = j;
 
-        ROS_WARN((joint.first + ":\t" + std::to_string(j)).c_str());
+        // ROS_WARN((joint.first + ":\t" + std::to_string(j)).c_str());
       }
       jtp.positions[static_cast<size_t>(j)] = joint.second;
 
@@ -1192,9 +1192,9 @@ static inline void toMsg(trajectory_msgs::JointTrajectory& traj_msg,
   {
     for (int j = 0; j < traj.cols(); ++j)
     {
-      if(i == traj.rows() - 1){
-        ROS_WARN((joint_names[static_cast<size_t>(j)] + ":\t" + std::to_string(jn_to_index[joint_names[static_cast<size_t>(j)]]) + ":\t" + std::to_string(traj(i, j))).c_str());
-      }
+      // if(i == traj.rows() - 1){
+      //   // ROS_WARN((joint_names[static_cast<size_t>(j)] + ":\t" + std::to_string(jn_to_index[joint_names[static_cast<size_t>(j)]]) + ":\t" + std::to_string(traj(i, j))).c_str());
+      // }
       traj_msg.points[static_cast<size_t>(i)]
           .positions[static_cast<size_t>(jn_to_index[joint_names[static_cast<size_t>(j)]])] = traj(i, j);
     }
