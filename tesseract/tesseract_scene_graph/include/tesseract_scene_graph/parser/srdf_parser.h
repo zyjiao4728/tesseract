@@ -319,6 +319,19 @@ public:
     groups_.push_back(group);
   }
 
+    void removeGroup(const std::string &group_id)
+  {
+    for(int i = 0; i < groups_.size(); i++)
+    {
+      if(groups_[i].name_ == group_id)
+      {
+        groups_.erase(groups_.begin() + i);
+        break;
+      }
+    }
+  }
+
+
 private:
   void loadVirtualJoints(const tesseract_scene_graph::SceneGraph& scene_graph, TiXmlElement* srdf_xml)
   {
