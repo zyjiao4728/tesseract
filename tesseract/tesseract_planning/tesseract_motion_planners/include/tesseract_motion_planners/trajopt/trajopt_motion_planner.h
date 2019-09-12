@@ -74,6 +74,9 @@ public:
    */
   bool solve(PlannerResponse& response) override;
 
+  bool solve(PlannerResponse& response, std::vector<double>& cost_vals, std::vector<double>& cnt_viols, double& total_cost);
+
+
   bool terminate() override;
 
   void clear() override;
