@@ -19,11 +19,22 @@ public:
                             tesseract_environment::Environment::ConstPtr env,
                             tesseract_kinematics::ForwardKinematics::ConstPtr kin);
 
+  ContinuousMotionValidator(ompl::base::SpaceInformationPtr space_info,
+                            tesseract_environment::Environment::ConstPtr env,
+                            tesseract_kinematics::ForwardKinematics::ConstPtr kin,
+                            std::string link_name, Eigen::Isometry3d & trans, double tor = 0.05);
+
   bool checkMotion(const ompl::base::State* s1, const ompl::base::State* s2) const override;
 
   bool checkMotion(const ompl::base::State* s1,
                    const ompl::base::State* s2,
                    std::pair<ompl::base::State*, double>& lastValid) const override;
+
+  void setConstraints(std::string link_name, const ompl::base::State* state, double tor = 0.05);
+
+  void setConstraintsStd(std::string link_name, Eigen::Isometry3d trans, double tor);
+
+  bool checkConstraints(const ompl::base::State* state1, const ompl::base::State* state2) const;
 
 private:
   bool continuousCollisionCheck(const ompl::base::State* s1, const ompl::base::State* s2) const;
@@ -33,6 +44,13 @@ private:
   tesseract_collision::ContinuousContactManager::Ptr contact_manager_;
   std::vector<std::string> links_;
   std::vector<std::string> joints_;
+
+  std::vector<std::string> joint_names_;
+  std::vector<std::string> link_names_;
+
+  std::string constraint_name_;
+  Eigen::Isometry3d goal_transform_;
+  double tor_;
 };
 }  // namespace tesseract_motion_planners
 

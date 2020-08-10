@@ -137,7 +137,7 @@ inline tesseract_motion_planners::Waypoint::Ptr toWaypoint(const sensor_msgs::Jo
  * @param waypoints A vector of waypoints
  * @return Pose Array
  */
-geometry_msgs::PoseArray toPoseArray(const std::vector<tesseract_motion_planners::Waypoint::Ptr>& waypoints)
+inline geometry_msgs::PoseArray toPoseArray(const std::vector<tesseract_motion_planners::Waypoint::Ptr>& waypoints)
 {
   geometry_msgs::PoseArray pose_array;
   for (const auto& wp : waypoints)
@@ -164,7 +164,7 @@ geometry_msgs::PoseArray toPoseArray(const std::vector<tesseract_motion_planners
  * @param process_definition A process definition
  * @return Pose Array
  */
-geometry_msgs::PoseArray toPoseArray(const tesseract_process_planners::ProcessDefinition& process_definition)
+inline geometry_msgs::PoseArray toPoseArray(const tesseract_process_planners::ProcessDefinition& process_definition)
 {
   geometry_msgs::PoseArray full_path;
   for (size_t i = 0; i < process_definition.segments.size(); ++i)
@@ -194,7 +194,7 @@ geometry_msgs::PoseArray toPoseArray(const tesseract_process_planners::ProcessDe
  * @param file_path The location to save the file
  * @return true if successful
  */
-bool toCSVFile(const trajectory_msgs::JointTrajectory& joint_trajectory, const std::string& file_path)
+inline bool toCSVFile(const trajectory_msgs::JointTrajectory& joint_trajectory, const std::string& file_path) 
 {
   std::ofstream myfile;
   myfile.open(file_path);

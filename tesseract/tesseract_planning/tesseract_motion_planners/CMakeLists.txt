@@ -70,6 +70,7 @@ add_library(${PROJECT_NAME}_ompl SHARED
   src/ompl/chain_ompl_interface.cpp
   src/ompl/conversions.cpp
   src/ompl/continuous_motion_validator.cpp
+  src/ompl/sphere_constraints.cpp
 )
 target_link_libraries(${PROJECT_NAME}_ompl PUBLIC ${PROJECT_NAME}_core ${OMPL_LIBRARIES})
 target_compile_options(${PROJECT_NAME}_ompl PRIVATE -Wsuggest-override -Wconversion -Wsign-conversion)
