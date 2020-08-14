@@ -38,6 +38,13 @@ public:
 
   void setAdjacencyMap();
 
+  void populateAdjacent();
+
+  std::map<std::string, std::string> getAdjacent() const { return this->adj_map;};
+
+  bool filterAdjacent(std::string link_name1, std::string link_name2) const;
+
+
 
   bool isStateValidStd(std::vector<double> wp) const;
 
@@ -46,6 +53,8 @@ public:
   void setConstraintsStd(std::string link_name, Eigen::Isometry3d & trans, double tor = 0.05);
 
   bool checkConstraints(const ompl::base::State* state) const;
+
+  bool satisfyVelocity(boost::optional<ompl::geometric::PathGeometric> & sol );
 
   ompl::geometric::SimpleSetupPtr ss_;
 
@@ -60,7 +69,8 @@ private:
   tesseract_collision::DiscreteContactManager::Ptr contact_manager_;
   std::vector<std::string> joint_names_;
   std::vector<std::string> link_names_;
-
+  std::map<std::string, std::string> adj_map;
+  
   std::string constraint_name_;
   Eigen::Isometry3d goal_transform_;
   double tor_;

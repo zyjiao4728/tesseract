@@ -30,9 +30,18 @@ public:
                    const ompl::base::State* s2,
                    std::pair<ompl::base::State*, double>& lastValid) const override;
 
+
+  void populateAdjacent();
+
+  std::map<std::string, std::string> getAdjacent() const { return this->adj_map;};
+
+  bool filterAdjacent(std::string link_name1, std::string link_name2) const;
+
   void setConstraints(std::string link_name, const ompl::base::State* state, double tor = 0.05);
 
   void setConstraintsStd(std::string link_name, Eigen::Isometry3d trans, double tor);
+
+  
 
   bool checkConstraints(const ompl::base::State* state1, const ompl::base::State* state2) const;
 
@@ -47,6 +56,7 @@ private:
 
   std::vector<std::string> joint_names_;
   std::vector<std::string> link_names_;
+  std::map<std::string, std::string> adj_map;
 
   std::string constraint_name_;
   Eigen::Isometry3d goal_transform_;

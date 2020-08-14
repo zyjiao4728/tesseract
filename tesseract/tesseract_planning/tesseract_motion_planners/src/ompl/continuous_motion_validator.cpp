@@ -22,13 +22,14 @@ ContinuousMotionValidator::ContinuousMotionValidator(ompl::base::SpaceInformatio
   contact_manager_ = env_->getContinuousContactManager();
   contact_manager_->setActiveCollisionObjects(links_);
   contact_manager_->setContactDistanceThreshold(0);
+  populateAdjacent();
 }
 
 ContinuousMotionValidator::ContinuousMotionValidator(ompl::base::SpaceInformationPtr space_info,
                                                      tesseract_environment::Environment::ConstPtr env,
                                                      tesseract_kinematics::ForwardKinematics::ConstPtr kin,
                                                      std::string link_name,
-                                                     Eigen::Isometry3d & trans,
+                                                     Eigen::Isometry3d& trans,
                                                      double tor)
   : MotionValidator(space_info), env_(std::move(env)), kin_(std::move(kin))
 {
@@ -44,7 +45,7 @@ ContinuousMotionValidator::ContinuousMotionValidator(ompl::base::SpaceInformatio
   contact_manager_->setContactDistanceThreshold(0);
 
   setConstraintsStd(link_name, trans, tor);
-
+  populateAdjacent();
 }
 
 bool ContinuousMotionValidator::checkMotion(const ompl::base::State* s1, const ompl::base::State* s2) const
@@ -72,8 +73,6 @@ bool ContinuousMotionValidator::checkMotion(const ompl::base::State* s1,
   {
     state_space.interpolate(s1, s2, static_cast<double>(i - 1) / n_steps, start_interp);
     state_space.interpolate(s1, s2, static_cast<double>(i) / n_steps, end_interp);
-
-
 
     if (!continuousCollisionCheck(start_interp, end_interp))
     {
@@ -103,6 +102,33 @@ bool ContinuousMotionValidator::checkMotion(const ompl::base::State* s1,
   return is_valid;
 }
 
+void ContinuousMotionValidator::populateAdjacent()
+{
+  for (int it = 0; it < this->links_.size() - 1; it++)
+  {
+    this->adj_map[this->links_[it]] = this->links_[it + 1];
+  }
+}
+
+bool ContinuousMotionValidator::filterAdjacent(std::string link_name1, std::string link_name2) const
+{
+  // std::vector<std::string>::iterator it = find (this->links_.begin(), this->links_.end(), link_name1)
+  // if (it != this->links_.end()){
+
+  // }
+
+  std::map<std::string, std::string> am = getAdjacent();
+  if (am.find(link_name1) != am.end())
+  {
+    if (am[link_name1].compare(link_name2) == 0)
+    {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 bool ContinuousMotionValidator::continuousCollisionCheck(const ompl::base::State* s1, const ompl::base::State* s2) const
 {
   const ompl::base::RealVectorStateSpace::StateType* start = s1->as<ompl::base::RealVectorStateSpace::StateType>();
@@ -124,13 +150,30 @@ bool ContinuousMotionValidator::continuousCollisionCheck(const ompl::base::State
   tesseract_collision::ContactResultMap contact_map;
   cm->contactTest(contact_map, tesseract_collision::ContactTestType::FIRST);
 
-
-  if (contact_map.size() ==1 ){
-    if (contact_map.begin()->first.first.compare("ur_arm_forearm_link")==0 && contact_map.begin()->first.second.compare("ur_arm_wrist_3_link")==0){
-      return true;
+  if (contact_map.size() == 1)
+  {
+    if (contact_map.begin()->first.first.compare("ur_arm_forearm_link") == 0 &&
+        contact_map.begin()->first.second.compare("ur_arm_wrist_3_link") == 0)
+    {
+      std::cout << " This is the bs" << std::endl;
     }
   }
 
+  auto it = contact_map.begin();
+
+  while (it != contact_map.end()){
+		if (this->filterAdjacent(it->first.first, it->first.second))
+		{
+			// supported in C++11
+			it = contact_map.erase(it);
+		}
+		else {
+			++it;
+		}
+  }
+
+
+  
   return contact_map.empty();
 }
 
@@ -153,12 +196,12 @@ void ContinuousMotionValidator::setConstraintsStd(std::string link_name, Eigen::
 
   // Eigen::Map<Eigen::VectorXd> joint_angles(state.data(), long(dof));
 
-      //   std::cout << "joints are " << std::endl;
-      // std::cout << this->joint_names_[0].c_str() << std::endl;
-      // std::cout << this->joint_names_[1].c_str() << std::endl;
-      // std::cout << this->joint_names_[2].c_str() << std::endl;
-      // std::cout << this->joint_names_[3].c_str() << std::endl;
-      // std::cout << this->joint_names_[4].c_str() << std::endl;
+  //   std::cout << "joints are " << std::endl;
+  // std::cout << this->joint_names_[0].c_str() << std::endl;
+  // std::cout << this->joint_names_[1].c_str() << std::endl;
+  // std::cout << this->joint_names_[2].c_str() << std::endl;
+  // std::cout << this->joint_names_[3].c_str() << std::endl;
+  // std::cout << this->joint_names_[4].c_str() << std::endl;
 
   // tesseract_environment::EnvState::ConstPtr env_state = env_->getState(this->joint_names_, joint_angles);
 
@@ -173,10 +216,8 @@ bool ContinuousMotionValidator::checkConstraints(const ompl::base::State* state1
   const ompl::base::RealVectorStateSpace::StateType* s = state1->as<ompl::base::RealVectorStateSpace::StateType>();
   const int dof = this->joint_names_.size();
 
-
-    // std::cout << "num of joint is" << std::endl;
-    // std::cout << dof << std::endl;
-
+  // std::cout << "num of joint is" << std::endl;
+  // std::cout << dof << std::endl;
 
   // const auto dof = si_->getStateDimension();
 
@@ -202,21 +243,20 @@ bool ContinuousMotionValidator::checkConstraints(const ompl::base::State* state1
     // std::cout << joint_angles << std::endl;
     // std::cout << joint_angles2 << std::endl;
 
-
     //     if (i == 2)
     // {
-      // const auto dof = si_->getStateDimension();
-      // const ompl::base::RealVectorStateSpace::StateType* ss1 = state1->as<ompl::base::RealVectorStateSpace::StateType>();
-      // const ompl::base::RealVectorStateSpace::StateType* ss2 = state2->as<ompl::base::RealVectorStateSpace::StateType>();
-      // Eigen::Map<Eigen::VectorXd> joint_angles(ss1->values, long(dof));
-      // Eigen::Map<Eigen::VectorXd> joint_angles2(ss2->values, long(dof));
+    // const auto dof = si_->getStateDimension();
+    // const ompl::base::RealVectorStateSpace::StateType* ss1 =
+    // state1->as<ompl::base::RealVectorStateSpace::StateType>(); const ompl::base::RealVectorStateSpace::StateType* ss2
+    // = state2->as<ompl::base::RealVectorStateSpace::StateType>(); Eigen::Map<Eigen::VectorXd>
+    // joint_angles(ss1->values, long(dof)); Eigen::Map<Eigen::VectorXd> joint_angles2(ss2->values, long(dof));
 
-      // std::cout << "states are " << std::endl;
-      // std::cout << joint_angles << std::endl;
+    // std::cout << "states are " << std::endl;
+    // std::cout << joint_angles << std::endl;
 
-      // std::cout << "joints are " << std::endl;
-      // std::cout << this->joint_names_[0].c_str() << std::endl;
-      // std::cout << joint_angles2 << std::endl;
+    // std::cout << "joints are " << std::endl;
+    // std::cout << this->joint_names_[0].c_str() << std::endl;
+    // std::cout << joint_angles2 << std::endl;
     // }
 
     // Eigen::Vector3d diff = temp.translation() - this->goal_transform_.translation();
@@ -227,15 +267,13 @@ bool ContinuousMotionValidator::checkConstraints(const ompl::base::State* state1
     //   return false;
     // }
 
-
     Eigen::Isometry3d diff_trans = this->goal_transform_ * temp.inverse();
     Eigen::Vector3d lin = diff_trans.translation();
     Eigen::Vector3d rot = diff_trans.rotation().eulerAngles(0, 1, 2);
     // if (sqrt(pow(lin.norm(),2)+pow(rot.norm(),2)) > this->tor_)
-      // return false;
+    // return false;
     if (lin.norm() > this->tor_)
       return false;
-
   }
 
   return true;

@@ -74,6 +74,8 @@ void ChainOmplInterface::setAdjacencyMap()
   // std::cout << "setting map" << std::endl;
   this->contact_manager_->setActiveCollisionObjects(adjacency_map->getActiveLinkNames());
   this->contact_manager_->setContactDistanceThreshold(0);
+
+  populateAdjacent();
 }
 
 boost::optional<ompl::geometric::PathGeometric> ChainOmplInterface::plan(ompl::base::PlannerPtr planner,
@@ -108,13 +110,13 @@ boost::optional<ompl::geometric::PathGeometric> ChainOmplInterface::plan(ompl::b
   // std::cout << "debug 4" << std::endl;
   if (status)
   {
-    if (params.simplify)
-    {
+    // if (params.simplify)
+    // {
       ss_->simplifySolution();
-    }
-    else
-    {
-    }
+    // }
+    // else
+    // {
+    // }
 
     int num_output_states = params.n_steps;
     if (ss_->getSolutionPath().getStateCount() < num_output_states)
@@ -129,6 +131,14 @@ boost::optional<ompl::geometric::PathGeometric> ChainOmplInterface::plan(ompl::b
   {
     return {};
   }
+}
+
+
+bool ChainOmplInterface::satisfyVelocity(boost::optional<ompl::geometric::PathGeometric> & sol ){
+
+  // this->kin_->
+
+  return false;
 }
 
 ompl::base::SpaceInformationPtr ChainOmplInterface::spaceInformation() { return ss_->getSpaceInformation(); }
@@ -150,10 +160,12 @@ bool ChainOmplInterface::isStateValid(const ompl::base::State* state) const
 
   bool constric_sat = checkConstraints(state);
 
-
-  if (contact_map.size() ==1 ){
-    if (contact_map.begin()->first.first.compare("ur_arm_forearm_link")==0 && contact_map.begin()->first.second.compare("ur_arm_wrist_3_link")==0){
-      contact_map.clear();
+  if (contact_map.size() == 1)
+  {
+    if (contact_map.begin()->first.first.compare("ur_arm_forearm_link") == 0 &&
+        contact_map.begin()->first.second.compare("ur_arm_wrist_3_link") == 0)
+    {
+      std::cout << " this is a bs" << std::endl;
     }
   }
 
@@ -177,7 +189,7 @@ void ChainOmplInterface::setConstraints(std::string link_name, const ompl::base:
   this->tor_ = tor;
 }
 
-void ChainOmplInterface::setConstraintsStd(std::string link_name, Eigen::Isometry3d & trans, double tor)
+void ChainOmplInterface::setConstraintsStd(std::string link_name, Eigen::Isometry3d& trans, double tor)
 {
   // const auto dof = joint_names_.size();
 
@@ -234,17 +246,57 @@ bool ChainOmplInterface::isStateValidStd(std::vector<double> wp) const
   tesseract_collision::ContactResultMap contact_map;
   cm->contactTest(contact_map, tesseract_collision::ContactTestType::FIRST);
 
+  if (contact_map.size() == 1)
+  {
+    if (contact_map.begin()->first.first.compare("ur_arm_forearm_link") == 0 &&
+        contact_map.begin()->first.second.compare("ur_arm_wrist_3_link") == 0)
+    {
+      std::cout << " This is the bs" << std::endl;
+    }
+  }
 
-  if (contact_map.size() ==1 ){
-    if (contact_map.begin()->first.first.compare("ur_arm_forearm_link")==0 && contact_map.begin()->first.second.compare("ur_arm_wrist_3_link")==0){
+  auto it = contact_map.begin();
+
+  while (it != contact_map.end()){
+		if (filterAdjacent(it->first.first, it->first.second))
+		{
+			// supported in C++11
+			it = contact_map.erase(it);
+		}
+		else {
+			++it;
+		}
+  }
+
+  return contact_map.empty();
+}
+
+
+void ChainOmplInterface::populateAdjacent()
+{
+  for (int it = 0; it < this->link_names_.size() - 1; it++)
+  {
+    this->adj_map[this->link_names_[it]] = this->link_names_[it + 1];
+  }
+}
+
+bool ChainOmplInterface::filterAdjacent(std::string link_name1, std::string link_name2) const
+{
+  // std::vector<std::string>::iterator it = find (this->links_.begin(), this->links_.end(), link_name1)
+  // if (it != this->links_.end()){
+
+  // }
+
+  std::map<std::string, std::string> am = getAdjacent();
+  if (am.find(link_name1) != am.end())
+  {
+    if (am[link_name1].compare(link_name2) == 0)
+    {
       return true;
     }
   }
-  // for (auto& x : contact_map)
-  // {
-  //   std::cout << x.first.first << " => " << x.first.second << '\n';
-  // }
-  return contact_map.empty();
+
+  return false;
 }
 
 }  // namespace tesseract_motion_planners
