@@ -195,6 +195,7 @@ public:
     if (it != inv_kin_manipulators_default_.end())
       return it->second->clone();
 
+    std::cout << "No IK solver detected" << std::endl;
     return nullptr;
   }
 
