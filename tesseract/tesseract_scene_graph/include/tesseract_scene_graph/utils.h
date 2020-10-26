@@ -3,9 +3,8 @@
 
 #include <tesseract_scene_graph/allowed_collision_matrix.h>
 #include <tesseract_scene_graph/graph.h>
-#include <tesseract_scene_graph/parser/urdf_parser.h>
 #include <tesseract_scene_graph/parser/srdf_parser.h>
-#include <console_bridge/console.h>
+#include <functional>
 
 namespace tesseract_scene_graph
 {

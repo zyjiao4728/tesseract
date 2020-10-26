@@ -43,10 +43,14 @@ public:
 
   explicit Sphere(double r) : Geometry(GeometryType::SPHERE), r_(r) {}
   ~Sphere() override = default;
+  Sphere(const Sphere&) = delete;
+  Sphere& operator=(const Sphere&) = delete;
+  Sphere(Sphere&&) = delete;
+  Sphere& operator=(Sphere&&) = delete;
 
   double getRadius() const { return r_; }
 
-  Geometry::Ptr clone() const override { return Sphere::Ptr(new Sphere(r_)); }
+  Geometry::Ptr clone() const override { return std::make_shared<Sphere>(r_); }
 
 private:
   double r_;

@@ -45,9 +45,12 @@ namespace tesseract_collision
 {
 namespace tesseract_collision_bullet
 {
+static const CollisionShapesConst EMPTY_COLLISION_SHAPES_CONST;
+static const tesseract_common::VectorIsometry3d EMPTY_COLLISION_SHAPES_TRANSFORMS;
+
 BulletCastSimpleManager::BulletCastSimpleManager()
 {
-  dispatcher_.reset(new btCollisionDispatcher(&coll_config_));
+  dispatcher_ = std::make_unique<btCollisionDispatcher>(&coll_config_);
 
   dispatcher_->registerCollisionCreateFunc(
       BOX_SHAPE_PROXYTYPE,
@@ -80,7 +83,7 @@ ContinuousContactManager::Ptr BulletCastSimpleManager::clone() const
   manager->setContactDistanceThreshold(contact_distance_);
   manager->setIsContactAllowedFn(fn_);
 
-  return manager;
+  return std::move(manager);
 }
 
 bool BulletCastSimpleManager::addCollisionObject(const std::string& name,
@@ -95,10 +98,23 @@ bool BulletCastSimpleManager::addCollisionObject(const std::string& name,
     addCollisionObject(new_cow);
     return true;
   }
-  else
-  {
-    return false;
-  }
+
+  return false;
+}
+
+const CollisionShapesConst& BulletCastSimpleManager::getCollisionObjectGeometries(const std::string& name) const
+{
+  auto cow = link2cow_.find(name);
+  return (link2cow_.find(name) != link2cow_.end()) ? cow->second->getCollisionGeometries() :
+                                                     EMPTY_COLLISION_SHAPES_CONST;
+}
+
+const tesseract_common::VectorIsometry3d&
+BulletCastSimpleManager::getCollisionObjectGeometriesTransforms(const std::string& name) const
+{
+  auto cow = link2cow_.find(name);
+  return (link2cow_.find(name) != link2cow_.end()) ? cow->second->getCollisionGeometriesTransforms() :
+                                                     EMPTY_COLLISION_SHAPES_TRANSFORMS;
 }
 
 bool BulletCastSimpleManager::hasCollisionObject(const std::string& name) const
@@ -202,7 +218,7 @@ void BulletCastSimpleManager::setCollisionObjectsTransform(const std::string& na
       else if (btBroadphaseProxy::isCompound(cow->getCollisionShape()->getShapeType()))
       {
         assert(dynamic_cast<btCompoundShape*>(cow->getCollisionShape()) != nullptr);
-        btCompoundShape* compound = static_cast<btCompoundShape*>(cow->getCollisionShape());
+        auto* compound = static_cast<btCompoundShape*>(cow->getCollisionShape());
         for (int i = 0; i < compound->getNumChildShapes(); ++i)
         {
           if (btBroadphaseProxy::isConvex(compound->getChildShape(i)->getShapeType()))
@@ -217,7 +233,7 @@ void BulletCastSimpleManager::setCollisionObjectsTransform(const std::string& na
           else if (btBroadphaseProxy::isCompound(compound->getChildShape(i)->getShapeType()))
           {
             assert(dynamic_cast<btCompoundShape*>(compound->getChildShape(i)) != nullptr);
-            btCompoundShape* second_compound = static_cast<btCompoundShape*>(compound->getChildShape(i));
+            auto* second_compound = static_cast<btCompoundShape*>(compound->getChildShape(i));
 
             for (int j = 0; j < second_compound->getNumChildShapes(); ++j)
             {
@@ -279,13 +295,13 @@ void BulletCastSimpleManager::setActiveCollisionObjects(const std::vector<std::s
     COW::Ptr& cow = co.second;
 
     // Update with request
-    updateCollisionObjectFilters(active_, *cow, false);
+    updateCollisionObjectFilters(active_, *cow);
 
     // Get the cast collision object
     COW::Ptr cast_cow = link2castcow_[cow->getName()];
 
     // Update with request
-    updateCollisionObjectFilters(active_, *cast_cow, true);
+    updateCollisionObjectFilters(active_, *cast_cow);
 
     // Add to collision object vector
     if (cow->m_collisionFilterGroup == btBroadphaseProxy::KinematicFilter)

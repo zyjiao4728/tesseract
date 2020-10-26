@@ -34,6 +34,7 @@ TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_geometry/geometry.h>
 #include <tesseract_common/types.h>
+#include <tesseract_common/resource.h>
 
 namespace tesseract_geometry
 {
@@ -45,13 +46,17 @@ public:
   using Ptr = std::shared_ptr<ConvexMesh>;
   using ConstPtr = std::shared_ptr<const ConvexMesh>;
 
-  ConvexMesh(const std::shared_ptr<const tesseract_common::VectorVector3d>& vertices,
-             const std::shared_ptr<const Eigen::VectorXi>& faces,
-             std::string file_path = "",
+  ConvexMesh(std::shared_ptr<const tesseract_common::VectorVector3d> vertices,
+             std::shared_ptr<const Eigen::VectorXi> faces,
+             tesseract_common::Resource::Ptr resource = nullptr,
              Eigen::Vector3d scale = Eigen::Vector3d(1, 1, 1))
-    : Geometry(GeometryType::CONVEX_MESH), vertices_(vertices), faces_(faces), file_path_(file_path), scale_(scale)
+    : Geometry(GeometryType::CONVEX_MESH)
+    , vertices_(std::move(vertices))
+    , faces_(std::move(faces))
+    , resource_(std::move(resource))
+    , scale_(std::move(scale))
   {
-    vertice_count_ = static_cast<int>(vertices->size());
+    vertice_count_ = static_cast<int>(vertices_->size());
 
     face_count_ = 0;
     for (int i = 0; i < faces_->size(); ++i)
@@ -62,22 +67,26 @@ public:
     }
   }
 
-  ConvexMesh(const std::shared_ptr<const tesseract_common::VectorVector3d>& vertices,
-             const std::shared_ptr<const Eigen::VectorXi>& faces,
+  ConvexMesh(std::shared_ptr<const tesseract_common::VectorVector3d> vertices,
+             std::shared_ptr<const Eigen::VectorXi> faces,
              int face_count,
-             std::string file_path = "",
+             tesseract_common::Resource::Ptr resource = nullptr,
              Eigen::Vector3d scale = Eigen::Vector3d(1, 1, 1))
     : Geometry(GeometryType::CONVEX_MESH)
-    , vertices_(vertices)
-    , faces_(faces)
+    , vertices_(std::move(vertices))
+    , faces_(std::move(faces))
     , face_count_(face_count)
-    , file_path_(file_path)
-    , scale_(scale)
+    , resource_(std::move(resource))
+    , scale_(std::move(scale))
   {
-    vertice_count_ = static_cast<int>(vertices->size());
+    vertice_count_ = static_cast<int>(vertices_->size());
   }
 
   ~ConvexMesh() override = default;
+  ConvexMesh(const ConvexMesh&) = delete;
+  ConvexMesh& operator=(const ConvexMesh&) = delete;
+  ConvexMesh(ConvexMesh&&) = delete;
+  ConvexMesh& operator=(ConvexMesh&&) = delete;
 
   const std::shared_ptr<const tesseract_common::VectorVector3d>& getVertices() const { return vertices_; }
   const std::shared_ptr<const Eigen::VectorXi>& getFaces() const { return faces_; }
@@ -92,7 +101,7 @@ public:
    *
    * @return Absolute path to the mesh file
    */
-  const std::string& getFilePath() const { return file_path_; }
+  const tesseract_common::Resource::Ptr getResource() const { return resource_; }
 
   /**
    * @brief Get the scale applied to file used to generate the mesh
@@ -102,7 +111,7 @@ public:
 
   Geometry::Ptr clone() const override
   {
-    return ConvexMesh::Ptr(new ConvexMesh(vertices_, faces_, face_count_, file_path_, scale_));
+    return std::make_shared<ConvexMesh>(vertices_, faces_, face_count_, resource_, scale_);
   }
 
 private:
@@ -111,7 +120,7 @@ private:
 
   int vertice_count_;
   int face_count_;
-  std::string file_path_;
+  tesseract_common::Resource::Ptr resource_;
   Eigen::Vector3d scale_;
 };
 }  // namespace tesseract_geometry

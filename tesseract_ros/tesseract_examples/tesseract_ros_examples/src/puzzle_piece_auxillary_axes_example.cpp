@@ -141,7 +141,7 @@ ProblemConstructionInfo PuzzlePieceAuxillaryAxesExample::cppMethod()
   //  end_pos[6]);
 
   // Populate Cost Info
-  std::shared_ptr<JointVelTermInfo> joint_vel = std::shared_ptr<JointVelTermInfo>(new JointVelTermInfo);
+  auto joint_vel = std::make_shared<JointVelTermInfo>();
   joint_vel->coeffs = std::vector<double>(9, 1.0);
   joint_vel->targets = std::vector<double>(9, 0.0);
   joint_vel->first_step = 0;
@@ -150,7 +150,7 @@ ProblemConstructionInfo PuzzlePieceAuxillaryAxesExample::cppMethod()
   joint_vel->term_type = TT_COST;
   pci.cost_infos.push_back(joint_vel);
 
-  std::shared_ptr<JointAccTermInfo> joint_acc = std::shared_ptr<JointAccTermInfo>(new JointAccTermInfo);
+  auto joint_acc = std::make_shared<JointAccTermInfo>();
   joint_acc->coeffs = std::vector<double>(9, 2.0);
   joint_acc->targets = std::vector<double>(9, 0.0);
   joint_acc->first_step = 0;
@@ -159,7 +159,7 @@ ProblemConstructionInfo PuzzlePieceAuxillaryAxesExample::cppMethod()
   joint_acc->term_type = TT_COST;
   pci.cost_infos.push_back(joint_acc);
 
-  std::shared_ptr<JointJerkTermInfo> joint_jerk = std::shared_ptr<JointJerkTermInfo>(new JointJerkTermInfo);
+  auto joint_jerk = std::make_shared<JointJerkTermInfo>();
   joint_jerk->coeffs = std::vector<double>(9, 5.0);
   joint_jerk->targets = std::vector<double>(9, 0.0);
   joint_jerk->first_step = 0;
@@ -168,21 +168,19 @@ ProblemConstructionInfo PuzzlePieceAuxillaryAxesExample::cppMethod()
   joint_jerk->term_type = TT_COST;
   pci.cost_infos.push_back(joint_jerk);
 
-  std::shared_ptr<CollisionTermInfo> collision = std::shared_ptr<CollisionTermInfo>(new CollisionTermInfo);
+  auto collision = std::make_shared<CollisionTermInfo>();
   collision->name = "collision";
   collision->term_type = TT_COST;
   collision->continuous = false;
   collision->first_step = 0;
   collision->last_step = pci.basic_info.n_steps - 1;
-  collision->gap = 1;
-  collision->info = createSafetyMarginDataVector(pci.basic_info.n_steps, 0.025, 20);
+  collision->info = createSafetyMarginDataVector(pci.basic_info.n_steps, 0.025, 1);
   pci.cost_infos.push_back(collision);
 
   // Populate Constraints
   for (auto i = 0; i < pci.basic_info.n_steps; ++i)
   {
-    std::shared_ptr<DynamicCartPoseTermInfo> pose =
-        std::shared_ptr<DynamicCartPoseTermInfo>(new DynamicCartPoseTermInfo);
+    auto pose = std::make_shared<DynamicCartPoseTermInfo>();
     pose->term_type = TT_CNT;
     pose->name = "waypoint_cart_" + std::to_string(i);
     pose->target = "grinder_frame";
@@ -190,8 +188,8 @@ ProblemConstructionInfo PuzzlePieceAuxillaryAxesExample::cppMethod()
 
     pose->link = "part";
     pose->tcp = tool_poses[static_cast<size_t>(i)];
-    pose->pos_coeffs = Eigen::Vector3d(10, 10, 10);
-    pose->rot_coeffs = Eigen::Vector3d(10, 10, 0);
+    pose->pos_coeffs = Eigen::Vector3d(5, 5, 5);
+    pose->rot_coeffs = Eigen::Vector3d(2, 2, 0);
 
     pci.cnt_infos.push_back(pose);
   }
@@ -206,7 +204,7 @@ bool PuzzlePieceAuxillaryAxesExample::run()
   nh_.getParam(ROBOT_DESCRIPTION_PARAM, urdf_xml_string);
   nh_.getParam(ROBOT_SEMANTIC_PARAM, srdf_xml_string);
 
-  ResourceLocatorFn locator = tesseract_rosutils::locateResource;
+  ResourceLocator::Ptr locator = std::make_shared<tesseract_rosutils::ROSResourceLocator>();
   if (!tesseract_->init(urdf_xml_string, srdf_xml_string, locator))
     return false;
 
@@ -245,7 +243,7 @@ bool PuzzlePieceAuxillaryAxesExample::run()
   }
 
   // Set Log Level
-  util::gLogLevel = util::LevelInfo;
+  util::gLogLevel = util::LevelError;
 
   // Setup Problem
   ProblemConstructionInfo pci = cppMethod();
@@ -255,6 +253,7 @@ bool PuzzlePieceAuxillaryAxesExample::run()
   ROS_INFO("puzzle piece plan");
 
   std::vector<ContactResultMap> collisions;
+  tesseract_environment::StateSolver::Ptr state_solver = prob->GetEnv()->getStateSolver();
   ContinuousContactManager::Ptr manager = prob->GetEnv()->getContinuousContactManager();
   AdjacencyMap::Ptr adjacency_map =
       std::make_shared<tesseract_environment::AdjacencyMap>(prob->GetEnv()->getSceneGraph(),
@@ -265,7 +264,7 @@ bool PuzzlePieceAuxillaryAxesExample::run()
   manager->setContactDistanceThreshold(0);
   collisions.clear();
   bool found =
-      checkTrajectory(*manager, *prob->GetEnv(), prob->GetKin()->getJointNames(), prob->GetInitTraj(), collisions);
+      checkTrajectory(collisions, *manager, *state_solver, prob->GetKin()->getJointNames(), prob->GetInitTraj());
 
   ROS_INFO((found) ? ("Initial trajectory is in collision") : ("Initial trajectory is collision free"));
 
@@ -286,7 +285,7 @@ bool PuzzlePieceAuxillaryAxesExample::run()
 
   collisions.clear();
   found = checkTrajectory(
-      *manager, *prob->GetEnv(), prob->GetKin()->getJointNames(), getTraj(opt.x(), prob->GetVars()), collisions);
+      collisions, *manager, *state_solver, prob->GetKin()->getJointNames(), getTraj(opt.x(), prob->GetVars()));
 
   ROS_INFO((found) ? ("Final trajectory is in collision") : ("Final trajectory is collision free"));
 

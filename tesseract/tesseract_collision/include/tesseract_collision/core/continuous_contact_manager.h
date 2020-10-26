@@ -45,7 +45,12 @@ public:
   using Ptr = std::shared_ptr<ContinuousContactManager>;
   using ConstPtr = std::shared_ptr<const ContinuousContactManager>;
 
+  ContinuousContactManager() = default;
   virtual ~ContinuousContactManager() = default;
+  ContinuousContactManager(const ContinuousContactManager&) = delete;
+  ContinuousContactManager& operator=(const ContinuousContactManager&) = delete;
+  ContinuousContactManager(ContinuousContactManager&&) = delete;
+  ContinuousContactManager& operator=(ContinuousContactManager&&) = delete;
 
   /**
    * @brief Clone the manager
@@ -77,6 +82,21 @@ public:
                                   const CollisionShapesConst& shapes,
                                   const tesseract_common::VectorIsometry3d& shape_poses,
                                   bool enabled = true) = 0;
+
+  /**
+   * @brief Get a collision objects collision geometries
+   * @param name The collision objects name
+   * @return A vector of collision geometries. The vector will be empty if the collision object is not found.
+   */
+  virtual const CollisionShapesConst& getCollisionObjectGeometries(const std::string& name) const = 0;
+
+  /**
+   * @brief Get a collision objects collision geometries transforms
+   * @param name  The collision objects name
+   * @return A vector of collision geometries transforms. The vector will be empty if the collision object is not found.
+   */
+  virtual const tesseract_common::VectorIsometry3d&
+  getCollisionObjectGeometriesTransforms(const std::string& name) const = 0;
 
   /**
    * @brief Find if a collision object already exists

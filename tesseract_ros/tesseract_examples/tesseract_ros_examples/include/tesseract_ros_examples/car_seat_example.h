@@ -47,15 +47,19 @@ namespace tesseract_ros_examples
 class CarSeatExample : public Example
 {
 public:
-  CarSeatExample(ros::NodeHandle nh, bool plotting, bool rviz);
-  ~CarSeatExample() = default;
+  CarSeatExample(const ros::NodeHandle& nh, bool plotting, bool rviz);
+  ~CarSeatExample() override = default;
+  CarSeatExample(const CarSeatExample&) = default;
+  CarSeatExample& operator=(const CarSeatExample&) = default;
+  CarSeatExample(CarSeatExample&&) = default;
+  CarSeatExample& operator=(CarSeatExample&&) = default;
 
   bool run() override;
 
 private:
   ros::NodeHandle nh_;
   int env_current_revision_;
-  tesseract_scene_graph::ResourceLocatorFn locator_;
+  tesseract_scene_graph::ResourceLocator::Ptr locator_;
   std::unordered_map<std::string, std::unordered_map<std::string, double>> saved_positions_;
 
   std::shared_ptr<trajopt::ProblemConstructionInfo> cppMethod(const std::string& start, const std::string& finish);

@@ -3,39 +3,10 @@
 
 #include <Eigen/Core>
 #include <tesseract_motion_planners/core/waypoint.h>
+#include <tesseract_process_planners/process_segment_definition.h>
 
 namespace tesseract_process_planners
 {
-/**
- * @class tesseract_process_planners::ProcessSegmentDefinition
- * @details
- * A process segment definition is assumed to have three components, an approach, process and departure.
- *
- */
-struct ProcessSegmentDefinition
-{
-  /**
-   * @brief The approach defined as a series of waypoints.
-   *
-   * If empty, the approach is skipped
-   */
-  std::vector<tesseract_motion_planners::Waypoint::Ptr> approach;
-
-  /**
-   * @brief The process is defined as a series of waypoints.
-   *
-   * This should contain a minimum of two waypoints.
-   */
-  std::vector<tesseract_motion_planners::Waypoint::Ptr> process;
-
-  /**
-   * @brief The departure is defined as a series of waypoints.
-   *
-   * If empty, the approach is skipped
-   */
-  std::vector<tesseract_motion_planners::Waypoint::Ptr> departure;
-};
-
 /**
  * @brief The ProcessTransitionDefinition struct which contains the waypoint data to allow moving between adjacent
  * process segments
@@ -86,7 +57,13 @@ public:
   using Ptr = std::shared_ptr<ProcessTransitionGenerator>;
   using ConstPtr = std::shared_ptr<const ProcessTransitionGenerator>;
 
+  ProcessTransitionGenerator() = default;
   virtual ~ProcessTransitionGenerator() = default;
+  ProcessTransitionGenerator(const ProcessTransitionGenerator&) = default;
+  ProcessTransitionGenerator& operator=(const ProcessTransitionGenerator&) = default;
+  ProcessTransitionGenerator(ProcessTransitionGenerator&&) = default;
+  ProcessTransitionGenerator& operator=(ProcessTransitionGenerator&&) = default;
+
   virtual std::vector<tesseract_motion_planners::Waypoint::Ptr>
   generate(const tesseract_motion_planners::Waypoint::Ptr& start_waypoint,
            const tesseract_motion_planners::Waypoint::Ptr& end_waypoint) const = 0;
@@ -141,7 +118,12 @@ public:
   using Ptr = std::shared_ptr<ProcessStepGenerator>;
   using ConstPtr = std::shared_ptr<const ProcessStepGenerator>;
 
+  ProcessStepGenerator() = default;
   virtual ~ProcessStepGenerator() = default;
+  ProcessStepGenerator(const ProcessStepGenerator&) = default;
+  ProcessStepGenerator& operator=(const ProcessStepGenerator&) = default;
+  ProcessStepGenerator(ProcessStepGenerator&&) = default;
+  ProcessStepGenerator& operator=(ProcessStepGenerator&&) = default;
 
   virtual std::vector<tesseract_motion_planners::Waypoint::Ptr>
   generate(const std::vector<tesseract_motion_planners::Waypoint::Ptr>& waypoints,

@@ -13,13 +13,18 @@ TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <eigen_conversions/eigen_msg.h>
 #include <iostream>
 #include <fstream>
+#include <tesseract_msgs/ProcessPlan.h>
+#include <tesseract_msgs/ProcessPlanPath.h>
+#include <tesseract_msgs/ProcessPlanSegment.h>
+#include <tesseract_msgs/ProcessPlanTransitionPair.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_motion_planners/core/waypoint.h>
 #include <tesseract_process_planners/process_definition.h>
 #include <tesseract_process_planners/process_planner.h>
+#include <tesseract_rosutils/utils.h>
 
-namespace tesseact_rosutils
+namespace tesseract_rosutils
 {
 /**
  * @brief Convert STD Vector to Eigen Vector
@@ -40,7 +45,7 @@ inline Eigen::VectorXd toEigen(const std::vector<double>& vector)
 inline Eigen::VectorXd toEigen(const sensor_msgs::JointState& joint_state, const std::vector<std::string>& joint_names)
 {
   Eigen::VectorXd position;
-  position.resize(static_cast<long>(joint_state.position.size()));
+  position.resize(static_cast<long>(joint_names.size()));
   int i = 0;
   for (const auto& joint_name : joint_names)
   {
@@ -61,14 +66,11 @@ inline Eigen::VectorXd toEigen(const sensor_msgs::JointState& joint_state, const
  * @return WaypointPtr
  */
 inline tesseract_motion_planners::Waypoint::Ptr
-toWaypoint(const geometry_msgs::Pose& pose, Eigen::Isometry3d change_base = Eigen::Isometry3d::Identity())
+toWaypoint(const geometry_msgs::Pose& pose, const Eigen::Isometry3d& change_base = Eigen::Isometry3d::Identity())
 {
-  tesseract_motion_planners::CartesianWaypoint::Ptr waypoint =
-      std::make_shared<tesseract_motion_planners::CartesianWaypoint>();
   Eigen::Isometry3d pose_eigen;
   tf::poseMsgToEigen(pose, pose_eigen);
-  waypoint->cartesian_position_ = change_base * pose_eigen;
-  return waypoint;
+  return std::make_shared<tesseract_motion_planners::CartesianWaypoint>(change_base * pose_eigen);
 }
 
 /**
@@ -78,7 +80,8 @@ toWaypoint(const geometry_msgs::Pose& pose, Eigen::Isometry3d change_base = Eige
  * @return std::vector<WaypointPtr>
  */
 inline std::vector<tesseract_motion_planners::Waypoint::Ptr>
-toWaypoint(const std::vector<geometry_msgs::Pose>& poses, Eigen::Isometry3d change_base = Eigen::Isometry3d::Identity())
+toWaypoint(const std::vector<geometry_msgs::Pose>& poses,
+           const Eigen::Isometry3d& change_base = Eigen::Isometry3d::Identity())
 {
   std::vector<tesseract_motion_planners::Waypoint::Ptr> waypoints;
   waypoints.reserve(poses.size());
@@ -96,7 +99,7 @@ toWaypoint(const std::vector<geometry_msgs::Pose>& poses, Eigen::Isometry3d chan
  */
 inline std::vector<std::vector<tesseract_motion_planners::Waypoint::Ptr>>
 toWaypoint(const std::vector<geometry_msgs::PoseArray>& pose_arrays,
-           Eigen::Isometry3d change_base = Eigen::Isometry3d::Identity())
+           const Eigen::Isometry3d& change_base = Eigen::Isometry3d::Identity())
 {
   std::vector<std::vector<tesseract_motion_planners::Waypoint::Ptr>> paths;
   paths.reserve(pose_arrays.size());
@@ -111,81 +114,141 @@ toWaypoint(const std::vector<geometry_msgs::PoseArray>& pose_arrays,
  * @param pose The joint positions
  * @return WaypointPtr
  */
-inline tesseract_motion_planners::Waypoint::Ptr toWaypoint(const std::vector<double>& pose)
+inline tesseract_motion_planners::Waypoint::Ptr toWaypoint(const std::vector<double>& pose,
+                                                           const std::vector<std::string>& names)
 {
-  tesseract_motion_planners::JointWaypoint::Ptr waypoint = std::make_shared<tesseract_motion_planners::JointWaypoint>();
-  waypoint->joint_positions_ = toEigen(pose);
-  return waypoint;
+  return std::make_shared<tesseract_motion_planners::JointWaypoint>(toEigen(pose), names);
+}
+
+inline tesseract_motion_planners::Waypoint::Ptr toWaypoint(const sensor_msgs::JointState& joint_state)
+{
+  assert(joint_state.name.size() == joint_state.position.size());
+  std::vector<std::string> joint_names = joint_state.name;
+  Eigen::VectorXd joint_positions(joint_state.position.size());
+  for (long i = 0; i < static_cast<long>(joint_state.position.size()); ++i)
+    joint_positions[i] = joint_state.position[static_cast<size_t>(i)];
+
+  return std::make_shared<tesseract_motion_planners::JointWaypoint>(joint_positions, joint_names);
 }
 
 /**
- * @brief Convert a joint_state type to joint waypoint
- * @param joint_state The JointState to be converted
- * @param joint_names This is the desired order of the joints
- * @return WaypointPtr
+ * @brief Convert a Tesseract Trajectory to Process Plan Path
+ * @param trajectory Tesseract Trajectory
+ * @param joint_names Joint names corresponding to the tesseract trajectory
+ * @return A process plan path
  */
-inline tesseract_motion_planners::Waypoint::Ptr toWaypoint(const sensor_msgs::JointState& joint_state,
-                                                           const std::vector<std::string>& joint_names)
+inline tesseract_msgs::ProcessPlanPath toProcessPlanPath(const tesseract_common::JointTrajectory& joint_trajectory)
 {
-  tesseract_motion_planners::JointWaypoint::Ptr waypoint = std::make_shared<tesseract_motion_planners::JointWaypoint>();
-  waypoint->joint_positions_ = toEigen(joint_state, joint_names);
-  return waypoint;
+  tesseract_msgs::ProcessPlanPath path;
+  if (joint_trajectory.trajectory.size() != 0)
+    tesseract_rosutils::toMsg(path.trajectory, joint_trajectory);
+  return path;
 }
 
 /**
- * @brief Convert a vector of waypoints into a pose array
- * @param waypoints A vector of waypoints
- * @return Pose Array
+ * @brief Convert a process plan segment to a process plan segment message
+ * @param segment_results The process segment plan
+ * @param joint_names Joint names corresponding to the tesseract trajectory
+ * @return Process Segment Message
  */
-geometry_msgs::PoseArray toPoseArray(const std::vector<tesseract_motion_planners::Waypoint::Ptr>& waypoints)
+inline tesseract_msgs::ProcessPlanSegment
+toProcessPlanSegement(const tesseract_process_planners::ProcessSegmentPlan& process_plan_segment)
 {
-  geometry_msgs::PoseArray pose_array;
-  for (const auto& wp : waypoints)
+  tesseract_msgs::ProcessPlanSegment process_segment;
+  process_segment.approach = toProcessPlanPath(process_plan_segment.approach);
+  process_segment.process = toProcessPlanPath(process_plan_segment.process);
+  process_segment.departure = toProcessPlanPath(process_plan_segment.departure);
+  return process_segment;
+}
+
+/**
+ * @brief Append a process segment to an existing joint_trajectory
+ * @param joint_trajectory Trajectory to add the process segment
+ * @param process_plan_segment Process plan segment
+ * @return
+ */
+inline bool toJointTrajectory(trajectory_msgs::JointTrajectory& joint_trajectory,
+                              const tesseract_msgs::ProcessPlanSegment& process_plan_segment)
+{
+  double t = 0;
+  if (!joint_trajectory.points.empty())
+    t = joint_trajectory.points.back().time_from_start.toSec();
+
+  for (const auto& point : process_plan_segment.approach.trajectory.points)
   {
-    if (wp->getType() == tesseract_motion_planners::WaypointType::CARTESIAN_WAYPOINT)
+    joint_trajectory.points.push_back(point);
+    joint_trajectory.points.back().time_from_start.fromSec(t + point.time_from_start.toSec());
+  }
+  t = joint_trajectory.points.back().time_from_start.toSec();
+
+  for (const auto& point : process_plan_segment.process.trajectory.points)
+  {
+    joint_trajectory.points.push_back(point);
+    joint_trajectory.points.back().time_from_start.fromSec(t + point.time_from_start.toSec());
+  }
+  t = joint_trajectory.points.back().time_from_start.toSec();
+
+  for (const auto& point : process_plan_segment.departure.trajectory.points)
+  {
+    joint_trajectory.points.push_back(point);
+    joint_trajectory.points.back().time_from_start.fromSec(t + point.time_from_start.toSec());
+  }
+
+  return true;
+}
+
+/**
+ * @brief Convert a Process Plan to a single Joint Trajectory for visualization
+ * This does not clear the trajectory passed in it appends.
+ * @param joint_trajectory Joint Trajectory Message
+ * @param process_plan Process Plan
+ * @return True if successful, otherwise false
+ */
+inline bool toJointTrajectory(trajectory_msgs::JointTrajectory& joint_trajectory,
+                              const tesseract_msgs::ProcessPlan& process_plan)
+{
+  double t = 0;
+  if (!joint_trajectory.points.empty())
+    t = joint_trajectory.points.back().time_from_start.toSec();
+
+  for (const auto& point : process_plan.from_start.trajectory.points)
+  {
+    joint_trajectory.points.push_back(point);
+    joint_trajectory.points.back().time_from_start.fromSec(t + point.time_from_start.toSec());
+  }
+  t = joint_trajectory.points.back().time_from_start.toSec();
+
+  if (!process_plan.from_start.trajectory.points.empty())
+  {
+    joint_trajectory.joint_names = process_plan.segments[0].process.trajectory.joint_names;
+    joint_trajectory.header = process_plan.segments[0].process.trajectory.header;
+  }
+
+  // Append process segments and transitions
+  for (size_t i = 0; i < process_plan.segments.size(); ++i)
+  {
+    toJointTrajectory(joint_trajectory, process_plan.segments[i]);
+    t = joint_trajectory.points.back().time_from_start.toSec();
+
+    if (i < (process_plan.segments.size() - 1))
     {
-      geometry_msgs::Pose pose;
-      const tesseract_motion_planners::CartesianWaypoint::Ptr& cwp =
-          std::static_pointer_cast<tesseract_motion_planners::CartesianWaypoint>(wp);
-      tf::poseEigenToMsg(cwp->cartesian_position_, pose);
-      pose_array.poses.push_back(pose);
-    }
-    else
-    {
-      ROS_ERROR("toPoseArray only support Cartesian Waypoints at this time.");
+      for (const auto& point : process_plan.transitions[i].from_end.trajectory.points)
+      {
+        joint_trajectory.points.push_back(point);
+        joint_trajectory.points.back().time_from_start.fromSec(t + point.time_from_start.toSec());
+      }
+      t = joint_trajectory.points.back().time_from_start.toSec();
     }
   }
 
-  return pose_array;
-}
-
-/**
- * @brief Convert a process definition into a single pose array
- * @param process_definition A process definition
- * @return Pose Array
- */
-geometry_msgs::PoseArray toPoseArray(const tesseract_process_planners::ProcessDefinition& process_definition)
-{
-  geometry_msgs::PoseArray full_path;
-  for (size_t i = 0; i < process_definition.segments.size(); ++i)
+  // Append path to home
+  for (const auto& point : process_plan.to_end.trajectory.points)
   {
-    geometry_msgs::PoseArray poses = toPoseArray(process_definition.segments[i].approach);
-    full_path.poses.insert(full_path.poses.end(), poses.poses.begin(), poses.poses.end());
-
-    poses = toPoseArray(process_definition.segments[i].process);
-    full_path.poses.insert(full_path.poses.end(), poses.poses.begin(), poses.poses.end());
-
-    poses = toPoseArray(process_definition.segments[i].departure);
-    full_path.poses.insert(full_path.poses.end(), poses.poses.begin(), poses.poses.end());
-
-    if (i < process_definition.transitions.size())
-    {
-      poses = toPoseArray(process_definition.transitions[i].transition_from_end);
-      full_path.poses.insert(full_path.poses.end(), poses.poses.begin(), poses.poses.end());
-    }
+    joint_trajectory.points.push_back(point);
+    joint_trajectory.points.back().time_from_start.fromSec(t + point.time_from_start.toSec());
   }
 
-  return full_path;
+  return true;
 }
 
 /**
@@ -194,7 +257,7 @@ geometry_msgs::PoseArray toPoseArray(const tesseract_process_planners::ProcessDe
  * @param file_path The location to save the file
  * @return true if successful
  */
-bool toCSVFile(const trajectory_msgs::JointTrajectory& joint_trajectory, const std::string& file_path)
+inline bool toCSVFile(const trajectory_msgs::JointTrajectory& joint_trajectory, const std::string& file_path)
 {
   std::ofstream myfile;
   myfile.open(file_path);
@@ -212,5 +275,5 @@ bool toCSVFile(const trajectory_msgs::JointTrajectory& joint_trajectory, const s
   myfile.close();
   return true;
 }
-}  // namespace tesseact_rosutils
+}  // namespace tesseract_rosutils
 #endif  // TESSERACT_ROSUTILS_CONVERSIONS_H

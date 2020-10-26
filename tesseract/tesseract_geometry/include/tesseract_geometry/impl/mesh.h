@@ -27,6 +27,7 @@
 #define TESSERACT_GEOMETRY_MESH_H
 
 #include <tesseract_common/macros.h>
+#include <tesseract_common/resource.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <Eigen/Geometry>
 #include <memory>
@@ -45,13 +46,17 @@ public:
   using Ptr = std::shared_ptr<Mesh>;
   using ConstPtr = std::shared_ptr<const Mesh>;
 
-  Mesh(const std::shared_ptr<const tesseract_common::VectorVector3d>& vertices,
-       const std::shared_ptr<const Eigen::VectorXi>& triangles,
-       std::string file_path = "",
+  Mesh(std::shared_ptr<const tesseract_common::VectorVector3d> vertices,
+       std::shared_ptr<const Eigen::VectorXi> triangles,
+       tesseract_common::Resource::Ptr resource = nullptr,
        Eigen::Vector3d scale = Eigen::Vector3d(1, 1, 1))
-    : Geometry(GeometryType::MESH), vertices_(vertices), triangles_(triangles), file_path_(file_path), scale_(scale)
+    : Geometry(GeometryType::MESH)
+    , vertices_(std::move(vertices))
+    , triangles_(std::move(triangles))
+    , resource_(std::move(resource))
+    , scale_(std::move(scale))
   {
-    vertice_count_ = static_cast<int>(vertices->size());
+    vertice_count_ = static_cast<int>(vertices_->size());
 
     triangle_count_ = 0;
     for (int i = 0; i < triangles_->size(); ++i)
@@ -63,23 +68,27 @@ public:
     }
   }
 
-  Mesh(const std::shared_ptr<const tesseract_common::VectorVector3d>& vertices,
-       const std::shared_ptr<const Eigen::VectorXi>& triangles,
+  Mesh(std::shared_ptr<const tesseract_common::VectorVector3d> vertices,
+       std::shared_ptr<const Eigen::VectorXi> triangles,
        int triangle_count,
-       std::string file_path = "",
+       tesseract_common::Resource::Ptr resource = nullptr,
        Eigen::Vector3d scale = Eigen::Vector3d(1, 1, 1))
     : Geometry(GeometryType::MESH)
-    , vertices_(vertices)
-    , triangles_(triangles)
+    , vertices_(std::move(vertices))
+    , triangles_(std::move(triangles))
     , triangle_count_(triangle_count)
-    , file_path_(file_path)
-    , scale_(scale)
+    , resource_(std::move(resource))
+    , scale_(std::move(scale))
   {
-    vertice_count_ = static_cast<int>(vertices->size());
-    assert((triangle_count * 4) == triangles_->size());
+    vertice_count_ = static_cast<int>(vertices_->size());
+    assert((triangle_count_ * 4) == triangles_->size());
   }
 
   ~Mesh() override = default;
+  Mesh(const Mesh&) = delete;
+  Mesh& operator=(const Mesh&) = delete;
+  Mesh(Mesh&&) = delete;
+  Mesh& operator=(Mesh&&) = delete;
 
   const std::shared_ptr<const tesseract_common::VectorVector3d>& getVertices() const { return vertices_; }
   const std::shared_ptr<const Eigen::VectorXi>& getTriangles() const { return triangles_; }
@@ -94,7 +103,7 @@ public:
    *
    * @return Absolute path to the mesh file
    */
-  const std::string& getFilePath() const { return file_path_; }
+  const tesseract_common::Resource::Ptr getResource() const { return resource_; }
 
   /**
    * @brief Get the scale applied to file used to generate the mesh
@@ -104,7 +113,7 @@ public:
 
   Geometry::Ptr clone() const override
   {
-    return Mesh::Ptr(new Mesh(vertices_, triangles_, triangle_count_, file_path_, scale_));
+    return std::make_shared<Mesh>(vertices_, triangles_, triangle_count_, resource_, scale_);
   }
 
 private:
@@ -112,7 +121,7 @@ private:
   std::shared_ptr<const Eigen::VectorXi> triangles_;
   int vertice_count_;
   int triangle_count_;
-  std::string file_path_;
+  tesseract_common::Resource::Ptr resource_;
   Eigen::Vector3d scale_;
 };
 }  // namespace tesseract_geometry

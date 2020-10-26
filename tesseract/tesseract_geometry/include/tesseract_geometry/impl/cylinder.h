@@ -43,11 +43,15 @@ public:
 
   Cylinder(double r, double l) : Geometry(GeometryType::CYLINDER), r_(r), l_(l) {}
   ~Cylinder() override = default;
+  Cylinder(const Cylinder&) = delete;
+  Cylinder& operator=(const Cylinder&) = delete;
+  Cylinder(Cylinder&&) = delete;
+  Cylinder& operator=(Cylinder&&) = delete;
 
   double getRadius() const { return r_; }
   double getLength() const { return l_; }
 
-  Geometry::Ptr clone() const override { return Cylinder::Ptr(new Cylinder(r_, l_)); }
+  Geometry::Ptr clone() const override { return std::make_shared<Cylinder>(r_, l_); }
 
 private:
   double r_;

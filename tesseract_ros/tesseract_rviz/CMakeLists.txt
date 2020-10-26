@@ -1,8 +1,6 @@
 cmake_minimum_required(VERSION 3.5.0)
 project(tesseract_rviz)
 
-add_compile_options(-std=c++11 -Wall -Wextra)
-
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   message_generation
@@ -16,6 +14,7 @@ find_package(catkin REQUIRED COMPONENTS
 ## System dependencies are found with CMake's conventions
 find_package(Boost REQUIRED thread date_time system filesystem)
 find_package(tesseract REQUIRED)
+find_package(tesseract_common REQUIRED)
 find_package(Eigen3 REQUIRED)
 
 list(FIND CMAKE_CXX_COMPILE_FEATURES cxx_std_11 CXX_FEATURE_FOUND)
@@ -71,6 +70,7 @@ catkin_package(
     OGRE
     QT
     tesseract
+    tesseract_common
 )
 
 include_directories(
@@ -130,12 +130,7 @@ target_link_libraries(${PROJECT_NAME}_render_tools PUBLIC
   ${Boost_LIBRARIES}
 )
 
-target_compile_options(${PROJECT_NAME}_render_tools PRIVATE -Wall -Wextra -Wsuggest-override -Wconversion -Wsign-conversion)
-if(CXX_FEATURE_FOUND EQUAL "-1")
-    target_compile_options(${PROJECT_NAME}_render_tools PUBLIC -std=c++11)
-else()
-    target_compile_features(${PROJECT_NAME}_render_tools PUBLIC cxx_std_11)
-endif()
+tesseract_target_compile_options(${PROJECT_NAME}_render_tools PUBLIC)
 target_include_directories(${PROJECT_NAME}_render_tools PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
     "$<INSTALL_INTERFACE:include>")
@@ -164,12 +159,7 @@ target_link_libraries(${PROJECT_NAME}_state_plugin_core PUBLIC
     ${OGRE_LIBRARIES}
     ${QT_LIBRARIES}
     ${Boost_LIBRARIES})
-target_compile_options(${PROJECT_NAME}_state_plugin_core PRIVATE -Wall -Wextra -Wsuggest-override -Wconversion -Wsign-conversion)
-if(CXX_FEATURE_FOUND EQUAL "-1")
-    target_compile_options(${PROJECT_NAME}_state_plugin_core PUBLIC -std=c++11)
-else()
-    target_compile_features(${PROJECT_NAME}_state_plugin_core PUBLIC cxx_std_11)
-endif()
+tesseract_target_compile_options(${PROJECT_NAME}_state_plugin_core PUBLIC)
 target_include_directories(${PROJECT_NAME}_state_plugin_core PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
     "$<INSTALL_INTERFACE:include>")
@@ -182,12 +172,7 @@ target_include_directories(${PROJECT_NAME}_state_plugin_core SYSTEM PUBLIC
 
 add_library(${PROJECT_NAME}_state_plugin SHARED src/tesseract_state_plugin/plugin_init.cpp)
 target_link_libraries(${PROJECT_NAME}_state_plugin PRIVATE ${PROJECT_NAME}_state_plugin_core ${catkin_LIBRARIES} ${Boost_LIBRARIES})
-target_compile_options(${PROJECT_NAME}_state_plugin PRIVATE -Wall -Wextra -Wsuggest-override -Wconversion -Wsign-conversion)
-if(CXX_FEATURE_FOUND EQUAL "-1")
-    target_compile_options(${PROJECT_NAME}_state_plugin PUBLIC -std=c++11)
-else()
-    target_compile_features(${PROJECT_NAME}_state_plugin PUBLIC cxx_std_11)
-endif()
+tesseract_target_compile_options(${PROJECT_NAME}_state_plugin PRIVATE)
 target_include_directories(${PROJECT_NAME}_state_plugin PRIVATE
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
     "$<INSTALL_INTERFACE:include>")
@@ -207,12 +192,7 @@ target_link_libraries(${PROJECT_NAME}_trajectory_plugin_core PUBLIC
     ${OGRE_LIBRARIES}
     ${QT_LIBRARIES}
     ${Boost_LIBRARIES})
-target_compile_options(${PROJECT_NAME}_trajectory_plugin_core PRIVATE -Wall -Wextra -Wsuggest-override -Wconversion -Wsign-conversion)
-if(CXX_FEATURE_FOUND EQUAL "-1")
-    target_compile_options(${PROJECT_NAME}_trajectory_plugin_core PUBLIC -std=c++11)
-else()
-    target_compile_features(${PROJECT_NAME}_trajectory_plugin_core PUBLIC cxx_std_11)
-endif()
+tesseract_target_compile_options(${PROJECT_NAME}_trajectory_plugin_core PUBLIC)
 target_include_directories(${PROJECT_NAME}_trajectory_plugin_core PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
     "$<INSTALL_INTERFACE:include>")
@@ -229,12 +209,7 @@ target_link_libraries(${PROJECT_NAME}_trajectory_plugin PRIVATE
     tesseract::tesseract
     ${catkin_LIBRARIES}
     ${Boost_LIBRARIES})
-target_compile_options(${PROJECT_NAME}_trajectory_plugin PRIVATE -Wall -Wextra -Wsuggest-override -Wconversion -Wsign-conversion)
-if(CXX_FEATURE_FOUND EQUAL "-1")
-    target_compile_options(${PROJECT_NAME}_trajectory_plugin PUBLIC -std=c++11)
-else()
-    target_compile_features(${PROJECT_NAME}_trajectory_plugin PUBLIC cxx_std_11)
-endif()
+tesseract_target_compile_options(${PROJECT_NAME}_trajectory_plugin PRIVATE)
 target_include_directories(${PROJECT_NAME}_trajectory_plugin PRIVATE
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
     "$<INSTALL_INTERFACE:include>")
@@ -255,12 +230,7 @@ target_link_libraries(${PROJECT_NAME}_manipulation_plugin_core PUBLIC
     ${QT_LIBRARIES}
     ${Boost_LIBRARIES}
     ${EIGEN3_INCLUDE_DIRS})
-target_compile_options(${PROJECT_NAME}_manipulation_plugin_core PRIVATE -Wall -Wextra -Wsuggest-override -Wconversion -Wsign-conversion)
-if(CXX_FEATURE_FOUND EQUAL "-1")
-    target_compile_options(${PROJECT_NAME}_manipulation_plugin_core PUBLIC -std=c++11)
-else()
-    target_compile_features(${PROJECT_NAME}_manipulation_plugin_core PUBLIC cxx_std_11)
-endif()
+tesseract_target_compile_options(${PROJECT_NAME}_manipulation_plugin_core PUBLIC)
 target_include_directories(${PROJECT_NAME}_manipulation_plugin_core PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
     "$<INSTALL_INTERFACE:include>")
@@ -276,12 +246,7 @@ target_link_libraries(${PROJECT_NAME}_manipulation_plugin PRIVATE
     tesseract::tesseract
     ${catkin_LIBRARIES}
     ${Boost_LIBRARIES})
-target_compile_options(${PROJECT_NAME}_manipulation_plugin PRIVATE -Wall -Wextra -Wsuggest-override -Wconversion -Wsign-conversion)
-if(CXX_FEATURE_FOUND EQUAL "-1")
-    target_compile_options(${PROJECT_NAME}_manipulation_plugin PUBLIC -std=c++11)
-else()
-    target_compile_features(${PROJECT_NAME}_manipulation_plugin PUBLIC cxx_std_11)
-endif()
+tesseract_target_compile_options(${PROJECT_NAME}_manipulation_plugin PRIVATE)
 target_include_directories(${PROJECT_NAME}_manipulation_plugin PRIVATE
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
     "$<INSTALL_INTERFACE:include>")
@@ -292,17 +257,25 @@ target_include_directories(${PROJECT_NAME}_manipulation_plugin SYSTEM PRIVATE
 
 add_executable(${PROJECT_NAME}_test src/test.cpp)
 target_link_libraries(${PROJECT_NAME}_test PRIVATE ${PROJECT_NAME}_trajectory_plugin_core ${catkin_LIBRARIES})
-target_compile_options(${PROJECT_NAME}_test PRIVATE -Wall -Wextra -Wsuggest-override -Wconversion -Wsign-conversion)
-if(CXX_FEATURE_FOUND EQUAL "-1")
-    target_compile_options(${PROJECT_NAME}_test PUBLIC -std=c++11)
-else()
-    target_compile_features(${PROJECT_NAME}_test PUBLIC cxx_std_11)
-endif()
+tesseract_target_compile_options(${PROJECT_NAME}_test PRIVATE)
 target_include_directories(${PROJECT_NAME}_test PRIVATE
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
     "$<INSTALL_INTERFACE:include>")
 target_include_directories(${PROJECT_NAME}_test SYSTEM PRIVATE
     ${catkin_INCLUDE_DIRS})
+
+# Files generated by MOC, RCC, and UIC may produce clang-tidy warnings.
+# We generate a dummy .clang-tidy file in the binary directory that disables
+# all clang-tidy checks except one that will never match.  This one check is
+# necessary; clang-tidy reports an error when no checks are enabled.
+# Since the Qt code generators will generate source files in the binary tree,
+# clang-tidy will load the configuration from this dummy file when the sources
+# are built.
+#file(WRITE "${tesseract_rviz_BINARY_DIR}/.clang-tidy" "
+#---
+#Checks: '-*,llvm-twine-local'
+#...
+#")
 
 
 # Mark executables and/or libraries for installation
@@ -321,5 +294,9 @@ install(DIRECTORY include/${PROJECT_NAME}/
 
 # Mark plugin XML files for installation
 install(FILES tesseract_rviz_state_plugin_description.xml tesseract_rviz_trajectory_plugin_description.xml tesseract_rviz_manipulation_plugin_description.xml
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+)
+
+install(DIRECTORY ogre_media
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )

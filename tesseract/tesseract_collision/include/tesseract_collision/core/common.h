@@ -39,6 +39,7 @@ TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <console_bridge/console.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
+#include <tesseract_common/utils.h>
 #include <tesseract_collision/core/types.h>
 #include <tesseract_collision/core/common.h>
 
@@ -75,8 +76,10 @@ inline bool isLinkActive(const std::vector<std::string>& active, const std::stri
  * @param verbose If true print debug informaton
  * @return True if contact is allowed between the two object, otherwise false.
  */
-inline bool
-isContactAllowed(const std::string& name1, const std::string& name2, const IsContactAllowedFn acm, bool verbose = false)
+inline bool isContactAllowed(const std::string& name1,
+                             const std::string& name2,
+                             const IsContactAllowedFn& acm,
+                             bool verbose = false)
 {
   // do not distance check geoms part of the same object / link / attached body
   if (name1 == name2)
@@ -121,30 +124,29 @@ inline ContactResult* processResult(ContactTestData& cdata,
 
     return &(cdata.res.insert(std::make_pair(key, data)).first->second.back());
   }
-  else
+
+  assert(cdata.type != ContactTestType::FIRST);
+  ContactResultVector& dr = cdata.res[key];
+  if (cdata.type == ContactTestType::ALL)
   {
-    assert(cdata.type != ContactTestType::FIRST);
-    ContactResultVector& dr = cdata.res[key];
-    if (cdata.type == ContactTestType::ALL)
-    {
-      dr.emplace_back(contact);
-      return &(dr.back());
-    }
-    else if (cdata.type == ContactTestType::CLOSEST)
-    {
-      if (contact.distance < dr[0].distance)
-      {
-        dr[0] = contact;
-        return &(dr[0]);
-      }
-    }
-    //    else if (cdata.cdata.condition == DistanceRequestType::LIMITED)
-    //    {
-    //      assert(dr.size() < cdata.req->max_contacts_per_body);
-    //      dr.emplace_back(contact);
-    //      return &(dr.back());
-    //    }
+    dr.emplace_back(contact);
+    return &(dr.back());
   }
+
+  if (cdata.type == ContactTestType::CLOSEST)
+  {
+    if (contact.distance < dr[0].distance)
+    {
+      dr[0] = contact;
+      return &(dr[0]);
+    }
+  }
+  //    else if (cdata.cdata.condition == DistanceRequestType::LIMITED)
+  //    {
+  //      assert(dr.size() < cdata.req->max_contacts_per_body);
+  //      dr.emplace_back(contact);
+  //      return &(dr.back());
+  //    }
 
   return nullptr;
 }
@@ -170,16 +172,18 @@ inline int createConvexHull(tesseract_common::VectorVector3d& vertices,
   vertices.clear();
 
   btConvexHullComputer conv;
-  btAlignedObjectArray<btVector3> points;
-  points.reserve(static_cast<int>(input.size()));
+  std::vector<double> points;
+  points.reserve(input.size() * 3);
   for (const auto& v : input)
   {
-    points.push_back(btVector3(static_cast<btScalar>(v[0]), static_cast<btScalar>(v[1]), static_cast<btScalar>(v[2])));
+    points.push_back(v[0]);
+    points.push_back(v[1]);
+    points.push_back(v[2]);
   }
 
-  btScalar val = conv.compute(&points[0].getX(),
-                              sizeof(btVector3),
-                              points.size(),
+  btScalar val = conv.compute(points.data(),
+                              3 * sizeof(double),
+                              static_cast<int>(input.size()),
                               static_cast<btScalar>(shrink),
                               static_cast<btScalar>(shrinkClamp));
   if (val < 0)
@@ -193,13 +197,14 @@ inline int createConvexHull(tesseract_common::VectorVector3d& vertices,
   for (int i = 0; i < num_verts; i++)
   {
     btVector3& v = conv.vertices[i];
-    vertices.push_back(Eigen::Vector3d(v.getX(), v.getY(), v.getZ()));
+    vertices.push_back(
+        Eigen::Vector3d(static_cast<double>(v.getX()), static_cast<double>(v.getY()), static_cast<double>(v.getZ())));
   }
 
-  int num_faces = conv.faces.size();
+  auto num_faces = static_cast<size_t>(conv.faces.size());
   std::vector<int> local_faces;
-  local_faces.reserve(static_cast<size_t>(3 * num_faces));
-  for (int i = 0; i < num_faces; i++)
+  local_faces.reserve(3ul * num_faces);
+  for (int i = 0; i < conv.faces.size(); i++)
   {
     std::vector<int> face;
     face.reserve(3);
@@ -232,7 +237,7 @@ inline int createConvexHull(tesseract_common::VectorVector3d& vertices,
   for (size_t i = 0; i < local_faces.size(); ++i)
     faces[static_cast<long>(i)] = local_faces[i];
 
-  return num_faces;
+  return conv.faces.size();
 }
 
 inline tesseract_geometry::ConvexMesh::Ptr makeConvexMesh(const tesseract_geometry::Mesh& mesh)
@@ -247,12 +252,14 @@ inline tesseract_geometry::ConvexMesh::Ptr makeConvexMesh(const tesseract_geomet
  * @brief Write a simple ply file given vertices and faces
  * @param path The file path
  * @param vertices A vector of vertices
+ * @param vertices_color The vertices color (0-255,0-255,0-255), if empty uses a default color
  * @param faces The first values indicates the number of vertices that define the face followed by the vertice index
  * @param num_faces The number of faces
  * @return False if failed to write file, otherwise true
  */
 inline bool writeSimplePlyFile(const std::string& path,
                                const tesseract_common::VectorVector3d& vertices,
+                               const std::vector<Eigen::Vector3i>& vectices_color,
                                const Eigen::VectorXi& faces,
                                int num_faces)
 {
@@ -264,6 +271,9 @@ inline bool writeSimplePlyFile(const std::string& path,
   //  property float x           { vertex contains float "x" coordinate }
   //  property float y           { y coordinate is also a vertex property }
   //  property float z           { z coordinate, too }
+  //  property uchar red         { start of vertex color }
+  //  property uchar green
+  //  property uchar blue
   //  element face 6             { there are 6 "face" elements in the file }
   //  property list uchar int vertex_index { "vertex_indices" is a list of ints }
   //  end_header                 { delimits the end of the header }
@@ -293,18 +303,46 @@ inline bool writeSimplePlyFile(const std::string& path,
   myfile << "format ascii 1.0\n";
   myfile << "comment made by tesseract\n";
   myfile << "element vertex " << vertices.size() << "\n";
-  myfile << "property double x\n";
-  myfile << "property double y\n";
-  myfile << "property double z\n";
+  myfile << "property float x\n";
+  myfile << "property float y\n";
+  myfile << "property float z\n";
+  if (!vectices_color.empty())
+  {
+    myfile << "property uchar red\n";
+    myfile << "property uchar green\n";
+    myfile << "property uchar blue\n";
+  }
   myfile << "element face " << num_faces << "\n";
-  myfile << "property list uchar uint vertex_indices\n";
+  myfile << "property list uchar int vertex_indices\n";
   myfile << "end_header\n";
 
   // Add vertices
-  for (const auto& v : vertices)
+  if (vectices_color.empty())
   {
-    myfile << std::fixed << std::setprecision(std::numeric_limits<double>::digits10 + 1) << v[0] << " " << v[1] << " "
-           << v[2] << "\n";
+    for (const auto& v : vertices)
+    {
+      myfile << std::fixed << std::setprecision(std::numeric_limits<float>::digits10 + 1) << v[0] << " " << v[1] << " "
+             << v[2] << "\n";
+    }
+  }
+  else if (vectices_color.size() == 1)
+  {
+    const Eigen::Vector3i& default_color = vectices_color[0];
+    for (const auto& v : vertices)
+    {
+      myfile << std::fixed << std::setprecision(std::numeric_limits<float>::digits10 + 1) << v[0] << " " << v[1] << " "
+             << v[2] << " " << default_color[0] << " " << default_color[1] << " " << default_color[2] << "\n";
+    }
+  }
+  else
+  {
+    for (std::size_t i = 0; i < vertices.size(); ++i)
+    {
+      const Eigen::Vector3d& v = vertices[i];
+      const Eigen::Vector3i& v_color = vectices_color[i];
+      myfile << std::fixed << std::setprecision(std::numeric_limits<float>::digits10 + 1) << v[0] << " " << v[1] << " "
+             << v[2] << " " << v_color[0] << " " << v_color[1] << " " << v_color[2] << "\n";
+    }
   }
 
   // Add faces
@@ -326,19 +364,20 @@ inline bool writeSimplePlyFile(const std::string& path,
 }
 
 /**
- * @brief Determine if a string is a number
- * @param s The string to evaluate
- * @return True if numeric, otherwise false.
+ * @brief Write a simple ply file given vertices and faces
+ * @param path The file path
+ * @param vertices A vector of vertices
+ * @param faces The first values indicates the number of vertices that define the face followed by the vertice index
+ * @param num_faces The number of faces
+ * @return False if failed to write file, otherwise true
  */
-inline bool isNumeric(const std::string& s)
+inline bool writeSimplePlyFile(const std::string& path,
+                               const tesseract_common::VectorVector3d& vertices,
+                               const Eigen::VectorXi& faces,
+                               int num_faces)
 {
-  if (s.empty())
-    return false;
-
-  if (s[0] == '-')
-    return std::find_if(s.begin() + 1, s.end(), [](char c) { return !std::isdigit(c); }) == s.end();
-  else
-    return std::find_if(s.begin(), s.end(), [](char c) { return !std::isdigit(c); }) == s.end();
+  std::vector<Eigen::Vector3i> vertices_color;
+  return writeSimplePlyFile(path, vertices, vertices_color, faces, num_faces);
 }
 
 /**
@@ -396,12 +435,12 @@ inline int loadSimplePlyFile(const std::string& path,
   std::getline(myfile, str);
   std::vector<std::string> tokens;
   boost::split(tokens, str, boost::is_any_of(" "));
-  if (tokens.size() != 3 || !isNumeric(tokens.back()))
+  if (tokens.size() != 3 || !tesseract_common::isNumeric(tokens.back()))
   {
     CONSOLE_BRIDGE_logError("Failed to parse file: %s", path.c_str());
     return false;
   }
-  size_t num_vertices = static_cast<size_t>(std::stoi(tokens.back()));
+  auto num_vertices = static_cast<size_t>(std::stoi(tokens.back()));
 
   std::getline(myfile, str);
   std::getline(myfile, str);
@@ -410,13 +449,13 @@ inline int loadSimplePlyFile(const std::string& path,
 
   tokens.clear();
   boost::split(tokens, str, boost::is_any_of(" "));
-  if (tokens.size() != 3 || !isNumeric(tokens.back()))
+  if (tokens.size() != 3 || !tesseract_common::isNumeric(tokens.back()))
   {
     CONSOLE_BRIDGE_logError("Failed to parse file: %s", path.c_str());
     return false;
   }
 
-  size_t num_faces = static_cast<size_t>(std::stoi(tokens.back()));
+  auto num_faces = static_cast<size_t>(std::stoi(tokens.back()));
   std::getline(myfile, str);
   std::getline(myfile, str);
   if (str != "end_header")
@@ -454,7 +493,7 @@ inline int loadSimplePlyFile(const std::string& path,
       return false;
     }
 
-    int num_verts = static_cast<int>(tokens.size());
+    auto num_verts = static_cast<int>(tokens.size());
     assert(num_verts >= 3);
     if (triangles_only && num_verts > 3)
     {

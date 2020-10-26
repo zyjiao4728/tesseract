@@ -61,9 +61,12 @@ public:
   using Ptr = std::shared_ptr<SRDFModel>;
   using ConstPtr = std::shared_ptr<const SRDFModel>;
 
-  SRDFModel() {}
-
-  ~SRDFModel() {}
+  SRDFModel() = default;
+  virtual ~SRDFModel() = default;
+  SRDFModel(const SRDFModel&) = default;
+  SRDFModel& operator=(const SRDFModel&) = default;
+  SRDFModel(SRDFModel&&) = default;
+  SRDFModel& operator=(SRDFModel&&) = default;
 
   
 
@@ -103,7 +106,7 @@ public:
   /// \brief Load Model from TiXMLDocument
   bool initXml(const tesseract_scene_graph::SceneGraph& scene_graph, TiXmlDocument* srdf_xml)
   {
-    TiXmlElement* robot_xml = srdf_xml ? srdf_xml->FirstChildElement("robot") : NULL;
+    TiXmlElement* robot_xml = srdf_xml ? srdf_xml->FirstChildElement("robot") : nullptr;
     if (!robot_xml)
     {
       CONSOLE_BRIDGE_logError("Could not find the 'robot' element in the xml file");
@@ -129,11 +132,9 @@ public:
       xml_file.close();
       return initString(scene_graph, xml_string);
     }
-    else
-    {
-      CONSOLE_BRIDGE_logError("Could not open file [%s] for parsing.", filename.c_str());
-      return false;
-    }
+
+    CONSOLE_BRIDGE_logError("Could not open file [%s] for parsing.", filename.c_str());
+    return false;
   }
 
   /// \brief Load Model from a XML-string
@@ -436,8 +437,8 @@ private:
         if (!scene_graph.getJoint(jname_str))
         {
           bool missing = true;
-          for (std::size_t k = 0; k < virtual_joints_.size(); ++k)
-            if (virtual_joints_[k].name_ == jname_str)
+          for (auto& virtual_joint : virtual_joints_)
+            if (virtual_joint.name_ == jname_str)
             {
               missing = false;
               break;
@@ -483,7 +484,7 @@ private:
           continue;
         }
 
-        g.chains_.push_back(std::make_pair(base_str, tip_str));
+        g.chains_.emplace_back(base_str, tip_str);
       }
 
       // get the subgroups in the groups
@@ -509,24 +510,24 @@ private:
     while (update)
     {
       update = false;
-      for (std::size_t i = 0; i < groups_.size(); ++i)
+      for (const auto& group : groups_)
       {
-        if (known_groups.find(groups_[i].name_) != known_groups.end())
+        if (known_groups.find(group.name_) != known_groups.end())
           continue;
-        if (groups_[i].subgroups_.empty())
+        if (group.subgroups_.empty())
         {
-          known_groups.insert(groups_[i].name_);
+          known_groups.insert(group.name_);
           update = true;
         }
         else
         {
           bool ok = true;
-          for (std::size_t j = 0; ok && j < groups_[i].subgroups_.size(); ++j)
-            if (known_groups.find(groups_[i].subgroups_[j]) == known_groups.end())
+          for (std::size_t j = 0; ok && j < group.subgroups_.size(); ++j)
+            if (known_groups.find(group.subgroups_[j]) == known_groups.end())
               ok = false;
           if (ok)
           {
-            known_groups.insert(groups_[i].name_);
+            known_groups.insert(group.name_);
             update = true;
           }
         }
@@ -537,11 +538,11 @@ private:
     if (known_groups.size() != groups_.size())
     {
       std::vector<Group> correct;
-      for (std::size_t i = 0; i < groups_.size(); ++i)
-        if (known_groups.find(groups_[i].name_) != known_groups.end())
-          correct.push_back(groups_[i]);
+      for (const auto& group : groups_)
+        if (known_groups.find(group.name_) != known_groups.end())
+          correct.push_back(group);
         else
-          CONSOLE_BRIDGE_logError("Group '%s' has unsatisfied subgroups", groups_[i].name_.c_str());
+          CONSOLE_BRIDGE_logError("Group '%s' has unsatisfied subgroups", group.name_.c_str());
       groups_.swap(correct);
     }
   }
@@ -569,8 +570,8 @@ private:
       gs.group_ = boost::trim_copy(std::string(gname));
 
       bool found = false;
-      for (std::size_t k = 0; k < groups_.size(); ++k)
-        if (groups_[k].name_ == gs.group_)
+      for (const auto& group : groups_)
+        if (group.name_ == gs.group_)
         {
           found = true;
           break;
@@ -601,8 +602,8 @@ private:
         if (!scene_graph.getJoint(jname_str))
         {
           bool missing = true;
-          for (std::size_t k = 0; k < virtual_joints_.size(); ++k)
-            if (virtual_joints_[k].name_ == jname_str)
+          for (const auto& virtual_joint : virtual_joints_)
+            if (virtual_joint.name_ == jname_str)
             {
               missing = false;
               break;
@@ -667,8 +668,8 @@ private:
       e.component_group_ = std::string(gname);
       boost::trim(e.component_group_);
       bool found = false;
-      for (std::size_t k = 0; k < groups_.size(); ++k)
-        if (groups_[k].name_ == e.component_group_)
+      for (const auto& group : groups_)
+        if (group.name_ == e.component_group_)
         {
           found = true;
           break;

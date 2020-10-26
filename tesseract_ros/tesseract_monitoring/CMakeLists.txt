@@ -3,10 +3,8 @@ project(tesseract_monitoring)
 
 find_package(tesseract REQUIRED)
 find_package(orocos_kdl REQUIRED)
-
+find_package(tesseract_common REQUIRED)
 find_package(Eigen3 REQUIRED)
-
-list(FIND CMAKE_CXX_COMPILE_FEATURES cxx_std_11 CXX_FEATURE_FOUND)
 
 find_package(catkin REQUIRED COMPONENTS
   roscpp
@@ -16,6 +14,7 @@ find_package(catkin REQUIRED COMPONENTS
   pluginlib
   tf2_ros
   tf2_eigen
+  visualization_msgs
 )
 
 generate_dynamic_reconfigure_options(
@@ -35,10 +34,12 @@ catkin_package(
     dynamic_reconfigure
     tf2_ros
     tf2_eigen
+    visualization_msgs
   DEPENDS
     EIGEN3
     tesseract
     orocos_kdl
+    tesseract_common
 )
 
 include_directories(
@@ -49,46 +50,30 @@ include_directories(
 # Tesseract ROS Nodes
 add_executable(${PROJECT_NAME}_contacts_node src/contact_monitor.cpp)
 target_link_libraries(${PROJECT_NAME}_contacts_node PRIVATE tesseract::tesseract ${catkin_LIBRARIES})
-target_compile_options(${PROJECT_NAME}_contacts_node PRIVATE -Wall -Wextra -Wsuggest-override -Wconversion -Wsign-conversion)
-if(CXX_FEATURE_FOUND EQUAL "-1")
-    target_compile_options(${PROJECT_NAME}_contacts_node PRIVATE -std=c++11)
-else()
-    target_compile_features(${PROJECT_NAME}_contacts_node PRIVATE cxx_std_11)
-endif()
-target_include_directories(${PROJECT_NAME}_contacts_node PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")
-target_include_directories(${PROJECT_NAME}_contacts_node SYSTEM PUBLIC ${catkin_INCLUDE_DIRS})
+tesseract_target_compile_options(${PROJECT_NAME}_contacts_node PRIVATE)
+tesseract_clang_tidy(${PROJECT_NAME}_contacts_node)
+target_include_directories(${PROJECT_NAME}_contacts_node PRIVATE "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")
+target_include_directories(${PROJECT_NAME}_contacts_node SYSTEM PRIVATE ${catkin_INCLUDE_DIRS})
 
 add_library(${PROJECT_NAME}_environment SHARED src/environment_monitor.cpp src/current_state_monitor.cpp)
 target_link_libraries(${PROJECT_NAME}_environment PUBLIC tesseract::tesseract ${catkin_LIBRARIES} ${Boost_LIBRARIES})
-target_compile_options(${PROJECT_NAME}_environment PRIVATE -Wall -Wextra -Wsuggest-override -Wconversion -Wsign-conversion)
-if(CXX_FEATURE_FOUND EQUAL "-1")
-    target_compile_options(${PROJECT_NAME}_environment PUBLIC -std=c++11)
-else()
-    target_compile_features(${PROJECT_NAME}_environment PUBLIC cxx_std_11)
-endif()
+tesseract_target_compile_options(${PROJECT_NAME}_environment PUBLIC)
+tesseract_clang_tidy(${PROJECT_NAME}_environment)
 target_include_directories(${PROJECT_NAME}_environment PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")
 target_include_directories(${PROJECT_NAME}_environment SYSTEM PUBLIC ${catkin_INCLUDE_DIRS} ${Boost_INCLUDE_DIRS})
 add_dependencies(${PROJECT_NAME}_environment ${PROJECT_NAME}_gencfg)
 
 add_executable(demo_scene demos/demo_scene.cpp)
 target_link_libraries(demo_scene PRIVATE ${PROJECT_NAME}_environment ${catkin_LIBRARIES})
-target_compile_options(demo_scene PRIVATE -Wall -Wextra -Wsuggest-override -Wconversion -Wsign-conversion)
-if(CXX_FEATURE_FOUND EQUAL "-1")
-    target_compile_options(demo_scene PRIVATE -std=c++11)
-else()
-    target_compile_features(demo_scene PRIVATE cxx_std_11)
-endif()
+tesseract_target_compile_options(demo_scene PRIVATE)
+tesseract_clang_tidy(demo_scene)
 target_include_directories(demo_scene PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")
 target_include_directories(demo_scene SYSTEM PUBLIC ${catkin_INCLUDE_DIRS})
 
 add_executable(${PROJECT_NAME}_environment_node src/environment_monitor_node.cpp)
 target_link_libraries(${PROJECT_NAME}_environment_node PRIVATE ${PROJECT_NAME}_environment ${catkin_LIBRARIES})
-target_compile_options(${PROJECT_NAME}_environment_node PRIVATE -Wall -Wextra -Wsuggest-override -Wconversion -Wsign-conversion)
-if(CXX_FEATURE_FOUND EQUAL "-1")
-    target_compile_options(${PROJECT_NAME}_environment_node PRIVATE -std=c++11)
-else()
-    target_compile_features(${PROJECT_NAME}_environment_node PRIVATE cxx_std_11)
-endif()
+tesseract_target_compile_options(${PROJECT_NAME}_environment_node PRIVATE)
+tesseract_clang_tidy(${PROJECT_NAME}_environment_node)
 target_include_directories(${PROJECT_NAME}_environment_node PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")
 target_include_directories(${PROJECT_NAME}_environment_node SYSTEM PUBLIC ${catkin_INCLUDE_DIRS})
 

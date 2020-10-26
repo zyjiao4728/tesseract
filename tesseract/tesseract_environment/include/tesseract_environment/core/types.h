@@ -42,12 +42,6 @@ TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 namespace tesseract_environment
 {
-enum class BodyType
-{
-  ROBOT_LINK = 0,    /**< @brief These are links at the creation of the environment */
-  ROBOT_ATTACHED = 1 /**< @brief These are links that are added after initial creation */
-};
-
 /** @brief This holds a state of the environment */
 struct EnvState
 {
@@ -68,8 +62,8 @@ struct AdjacencyMapPair
   using Ptr = std::shared_ptr<AdjacencyMapPair>;
   using ConstPtr = std::shared_ptr<const AdjacencyMapPair>;
 
-  std::string link_name;
-  Eigen::Isometry3d transform;
+  std::string link_name;       /**< @brief The kinematic link associated with the adjacent link */
+  Eigen::Isometry3d transform; /**< @brief A transform from the kinematic link (link_name) to the adjacent link */
 };
 
 class AdjacencyMap
@@ -113,7 +107,7 @@ public:
         assert(inv_adj_links.size() == 1);
 
         const std::string& ial = inv_adj_links[0];
-        std::vector<std::string>::const_iterator it = std::find(active_links.begin(), active_links.end(), ial);
+        auto it = std::find(active_links.begin(), active_links.end(), ial);
         if (it != active_links.end())
         {
           AdjacencyMapPair::Ptr pair = std::make_shared<AdjacencyMapPair>();
@@ -130,6 +124,10 @@ public:
   }
 
   virtual ~AdjacencyMap() = default;
+  AdjacencyMap(const AdjacencyMap&) = default;
+  AdjacencyMap& operator=(const AdjacencyMap&) = default;
+  AdjacencyMap(AdjacencyMap&&) = default;
+  AdjacencyMap& operator=(AdjacencyMap&&) = default;
 
   /**
    * @brief This is a list of all active links associated with the constructor data.
@@ -138,7 +136,7 @@ public:
   const std::vector<std::string>& getActiveLinkNames() const { return active_link_names_; }
 
   /**
-   * @brief A a link mapping to the associated kinematics link name if it exists
+   * @brief A link mapping to the associated kinematics link name if it exists
    * @param link_name Name of link
    * @return If the link does not have a associated kinematics link it return nullptr, otherwise return the pair.
    */

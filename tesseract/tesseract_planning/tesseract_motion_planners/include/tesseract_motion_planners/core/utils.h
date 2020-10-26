@@ -40,6 +40,13 @@ TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 namespace tesseract_motion_planners
 {
+/**
+ * @brief Inerpolate between two transforms return a vector of Eigen::Isometry transforms.
+ * @param start The Start Transform
+ * @param stop The Stop/End Transform
+ * @param steps The number of step
+ * @return A vector of Eigen::Isometry with a length = steps + 1
+ */
 inline tesseract_common::VectorIsometry3d interpolate(const Eigen::Isometry3d& start,
                                                       const Eigen::Isometry3d& stop,
                                                       int steps)
@@ -62,7 +69,7 @@ inline tesseract_common::VectorIsometry3d interpolate(const Eigen::Isometry3d& s
   Eigen::Vector3d trans;
   Eigen::Quaterniond q;
   Eigen::Isometry3d pose;
-  result.reserve(static_cast<size_t>(steps + 1));
+  result.reserve(static_cast<size_t>(steps) + 1);
   for (unsigned i = 0; i <= static_cast<unsigned>(steps); ++i)
   {
     trans = start_pos + step * i;
@@ -73,25 +80,31 @@ inline tesseract_common::VectorIsometry3d interpolate(const Eigen::Isometry3d& s
   return result;
 }
 
+/**
+ * @brief Inerpolate between two waypoints return a vector of waypoints.
+ * @param start The Start Waypoint
+ * @param stop The Stop/End Waypoint
+ * @param steps The number of step
+ * @return A vector of waypoints with a length = steps + 1
+ */
 inline std::vector<Waypoint::Ptr> interpolate(const Waypoint& start, const Waypoint& stop, int steps)
 {
   switch (start.getType())
   {
     case WaypointType::CARTESIAN_WAYPOINT:
     {
-      const CartesianWaypoint& w1 = static_cast<const CartesianWaypoint&>(start);
-      const CartesianWaypoint& w2 = static_cast<const CartesianWaypoint&>(stop);
-      tesseract_common::VectorIsometry3d eigen_poses =
-          interpolate(w1.cartesian_position_, w2.cartesian_position_, steps);
+      const auto& w1 = static_cast<const CartesianWaypoint&>(start);
+      const auto& w2 = static_cast<const CartesianWaypoint&>(stop);
+      tesseract_common::VectorIsometry3d eigen_poses = interpolate(w1.getTransform(), w2.getTransform(), steps);
 
       std::vector<Waypoint::Ptr> result;
       result.reserve(eigen_poses.size());
       for (auto& eigen_pose : eigen_poses)
       {
-        CartesianWaypoint::Ptr new_waypoint = std::make_shared<tesseract_motion_planners::CartesianWaypoint>();
-        new_waypoint->cartesian_position_ = eigen_pose;
-        new_waypoint->coeffs_ = start.coeffs_;
-        new_waypoint->is_critical_ = start.is_critical_;
+        CartesianWaypoint::Ptr new_waypoint =
+            std::make_shared<tesseract_motion_planners::CartesianWaypoint>(eigen_pose, w1.getParentLinkName());
+        new_waypoint->setCoefficients(start.getCoefficients());
+        new_waypoint->setIsCritical(start.isCritical());
         result.push_back(new_waypoint);
       }
 

@@ -2,7 +2,7 @@
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <gtest/gtest.h>
 #include <fstream>
-#include <tesseract_scene_graph/parser/urdf_parser.h>
+#include <tesseract_urdf/urdf_parser.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include "tesseract_kinematics/kdl/kdl_fwd_kin_chain.h"
@@ -17,7 +17,7 @@ std::string locateResource(const std::string& url)
   if (url.find("package://tesseract_support") == 0)
   {
     mod_url.erase(0, strlen("package://tesseract_support"));
-    size_t pos = mod_url.find("/");
+    size_t pos = mod_url.find('/');
     if (pos == std::string::npos)
     {
       return std::string();
@@ -42,8 +42,9 @@ tesseract_scene_graph::SceneGraph::Ptr getSceneGraph()
 {
   std::string path = std::string(TESSERACT_SUPPORT_DIR) + "/urdf/lbr_iiwa_14_r820.urdf";
 
-  tesseract_scene_graph::ResourceLocatorFn locator = locateResource;
-  return tesseract_scene_graph::parseURDFFile(path, locator);
+  tesseract_scene_graph::ResourceLocator::Ptr locator =
+      std::make_shared<tesseract_scene_graph::SimpleResourceLocator>(locateResource);
+  return tesseract_urdf::parseURDFFile(path, locator);
 }
 
 void runFwdKinTest(tesseract_kinematics::ForwardKinematics& kin)
@@ -62,6 +63,83 @@ void runFwdKinTest(tesseract_kinematics::ForwardKinematics& kin)
   ///////////////////////////
   // Test forward kinematics
   ///////////////////////////
+  {
+    pose.setIdentity();
+    EXPECT_TRUE(kin.calcFwdKin(pose, jvals, "link_1"));
+    Eigen::Isometry3d result;
+    result.setIdentity();
+    result.translation()[0] = 0;
+    result.translation()[1] = 0;
+    result.translation()[2] = 0;
+    EXPECT_TRUE(pose.isApprox(result));
+  }
+
+  {
+    pose.setIdentity();
+    EXPECT_TRUE(kin.calcFwdKin(pose, jvals, "link_2"));
+    Eigen::Isometry3d result;
+    result.setIdentity();
+    result.translation()[0] = -0.00043624;
+    result.translation()[1] = 0;
+    result.translation()[2] = 0.36;
+    EXPECT_TRUE(pose.isApprox(result));
+  }
+
+  {
+    pose.setIdentity();
+    EXPECT_TRUE(kin.calcFwdKin(pose, jvals, "link_3"));
+    Eigen::Isometry3d result;
+    result.setIdentity();
+    result.translation()[0] = -0.00043624;
+    result.translation()[1] = 0;
+    result.translation()[2] = 0.36;
+    EXPECT_TRUE(pose.isApprox(result));
+  }
+
+  {
+    pose.setIdentity();
+    EXPECT_TRUE(kin.calcFwdKin(pose, jvals, "link_4"));
+    Eigen::Isometry3d result;
+    result.setIdentity();
+    result.translation()[0] = 0;
+    result.translation()[1] = 0;
+    result.translation()[2] = 0.36 + 0.42;
+    EXPECT_TRUE(pose.isApprox(result));
+  }
+
+  {
+    pose.setIdentity();
+    EXPECT_TRUE(kin.calcFwdKin(pose, jvals, "link_5"));
+    Eigen::Isometry3d result;
+    result.setIdentity();
+    result.translation()[0] = 0;
+    result.translation()[1] = 0;
+    result.translation()[2] = 0.36 + 0.42;
+    EXPECT_TRUE(pose.isApprox(result));
+  }
+
+  {
+    pose.setIdentity();
+    EXPECT_TRUE(kin.calcFwdKin(pose, jvals, "link_6"));
+    Eigen::Isometry3d result;
+    result.setIdentity();
+    result.translation()[0] = 0;
+    result.translation()[1] = 0;
+    result.translation()[2] = 0.36 + 0.42 + 0.4;
+    EXPECT_TRUE(pose.isApprox(result));
+  }
+
+  {
+    pose.setIdentity();
+    EXPECT_TRUE(kin.calcFwdKin(pose, jvals, "link_7"));
+    Eigen::Isometry3d result;
+    result.setIdentity();
+    result.translation()[0] = 0;
+    result.translation()[1] = 0;
+    result.translation()[2] = 0.36 + 0.42 + 0.4;
+    EXPECT_TRUE(pose.isApprox(result));
+  }
+
   pose.setIdentity();
   EXPECT_TRUE(kin.calcFwdKin(pose, jvals, "tool0"));
   Eigen::Isometry3d result;
@@ -70,6 +148,29 @@ void runFwdKinTest(tesseract_kinematics::ForwardKinematics& kin)
   result.translation()[1] = 0;
   result.translation()[2] = 1.306;
   EXPECT_TRUE(pose.isApprox(result));
+}
+
+void runJacobianTestHelper(tesseract_kinematics::ForwardKinematics& kin,
+                           const Eigen::VectorXd& jvals,
+                           const std::string& link_name,
+                           const Eigen::Vector3d& link_point,
+                           const Eigen::Isometry3d& change_base)
+{
+  Eigen::MatrixXd jacobian, numerical_jacobian;
+  Eigen::Isometry3d pose;
+  kin.calcFwdKin(pose, jvals, link_name);
+
+  jacobian.resize(6, 7);
+  EXPECT_TRUE(kin.calcJacobian(jacobian, jvals, link_name));
+  tesseract_kinematics::jacobianChangeBase(jacobian, change_base);
+  tesseract_kinematics::jacobianChangeRefPoint(jacobian, (change_base * pose).linear() * link_point);
+
+  numerical_jacobian.resize(6, 7);
+  tesseract_kinematics::numericalJacobian(numerical_jacobian, change_base, kin, jvals, link_name, link_point);
+
+  for (int i = 0; i < 6; ++i)
+    for (int j = 0; j < 7; ++j)
+      EXPECT_NEAR(numerical_jacobian(i, j), jacobian(i, j), 1e-3);
 }
 
 void runJacobianTest(tesseract_kinematics::ForwardKinematics& kin)
@@ -92,17 +193,16 @@ void runJacobianTest(tesseract_kinematics::ForwardKinematics& kin)
   ///////////////////////////
   // Test Jacobian
   ///////////////////////////
-  jacobian.resize(6, 7);
-  EXPECT_TRUE(kin.calcJacobian(jacobian, jvals, "tool0"));
-
   Eigen::Vector3d link_point(0, 0, 0);
-  numerical_jacobian.resize(6, 7);
-  tesseract_kinematics::numericalJacobian(
-      numerical_jacobian, Eigen::Isometry3d::Identity(), kin, jvals, "tool0", link_point);
-
-  for (int i = 0; i < 6; ++i)
-    for (int j = 0; j < 7; ++j)
-      EXPECT_NEAR(numerical_jacobian(i, j), jacobian(i, j), 1e-3);
+  runJacobianTestHelper(kin, jvals, "base_link", link_point, Eigen::Isometry3d::Identity());
+  runJacobianTestHelper(kin, jvals, "link_1", link_point, Eigen::Isometry3d::Identity());
+  runJacobianTestHelper(kin, jvals, "link_2", link_point, Eigen::Isometry3d::Identity());
+  runJacobianTestHelper(kin, jvals, "link_3", link_point, Eigen::Isometry3d::Identity());
+  runJacobianTestHelper(kin, jvals, "link_4", link_point, Eigen::Isometry3d::Identity());
+  runJacobianTestHelper(kin, jvals, "link_5", link_point, Eigen::Isometry3d::Identity());
+  runJacobianTestHelper(kin, jvals, "link_6", link_point, Eigen::Isometry3d::Identity());
+  runJacobianTestHelper(kin, jvals, "link_7", link_point, Eigen::Isometry3d::Identity());
+  runJacobianTestHelper(kin, jvals, "tool0", link_point, Eigen::Isometry3d::Identity());
 
   ///////////////////////////
   // Test Jacobian at Point
@@ -114,17 +214,15 @@ void runJacobianTest(tesseract_kinematics::ForwardKinematics& kin)
     Eigen::Vector3d link_point(0, 0, 0);
     link_point[k] = 1;
 
-    // calcJacobian requires the link point to be in the base frame for which the jacobian is calculated.
-    EXPECT_TRUE(kin.calcJacobian(jacobian, jvals, "tool0"));
-    tesseract_kinematics::jacobianChangeRefPoint(jacobian, pose.linear() * link_point);
-
-    numerical_jacobian.resize(6, 7);
-    tesseract_kinematics::numericalJacobian(
-        numerical_jacobian, Eigen::Isometry3d::Identity(), kin, jvals, "tool0", link_point);
-
-    for (int i = 0; i < 6; ++i)
-      for (int j = 0; j < 7; ++j)
-        EXPECT_NEAR(numerical_jacobian(i, j), jacobian(i, j), 1e-3);
+    runJacobianTestHelper(kin, jvals, "base_link", link_point, Eigen::Isometry3d::Identity());
+    runJacobianTestHelper(kin, jvals, "link_1", link_point, Eigen::Isometry3d::Identity());
+    runJacobianTestHelper(kin, jvals, "link_2", link_point, Eigen::Isometry3d::Identity());
+    runJacobianTestHelper(kin, jvals, "link_3", link_point, Eigen::Isometry3d::Identity());
+    runJacobianTestHelper(kin, jvals, "link_4", link_point, Eigen::Isometry3d::Identity());
+    runJacobianTestHelper(kin, jvals, "link_5", link_point, Eigen::Isometry3d::Identity());
+    runJacobianTestHelper(kin, jvals, "link_6", link_point, Eigen::Isometry3d::Identity());
+    runJacobianTestHelper(kin, jvals, "link_7", link_point, Eigen::Isometry3d::Identity());
+    runJacobianTestHelper(kin, jvals, "tool0", link_point, Eigen::Isometry3d::Identity());
   }
 
   ///////////////////////////////////////////
@@ -142,15 +240,15 @@ void runJacobianTest(tesseract_kinematics::ForwardKinematics& kin)
     change_base.translation() = Eigen::Vector3d(0, 0, 0);
     change_base.translation()[k] = 1;
 
-    EXPECT_TRUE(kin.calcJacobian(jacobian, jvals, "tool0"));
-    tesseract_kinematics::jacobianChangeBase(jacobian, change_base);
-
-    numerical_jacobian.resize(6, 7);
-    tesseract_kinematics::numericalJacobian(numerical_jacobian, change_base, kin, jvals, "tool0", link_point);
-
-    for (int i = 0; i < 6; ++i)
-      for (int j = 0; j < 7; ++j)
-        EXPECT_NEAR(numerical_jacobian(i, j), jacobian(i, j), 1e-3);
+    runJacobianTestHelper(kin, jvals, "base_link", link_point, change_base);
+    runJacobianTestHelper(kin, jvals, "link_1", link_point, change_base);
+    runJacobianTestHelper(kin, jvals, "link_2", link_point, change_base);
+    runJacobianTestHelper(kin, jvals, "link_3", link_point, change_base);
+    runJacobianTestHelper(kin, jvals, "link_4", link_point, change_base);
+    runJacobianTestHelper(kin, jvals, "link_5", link_point, change_base);
+    runJacobianTestHelper(kin, jvals, "link_6", link_point, change_base);
+    runJacobianTestHelper(kin, jvals, "link_7", link_point, change_base);
+    runJacobianTestHelper(kin, jvals, "tool0", link_point, change_base);
   }
 
   ///////////////////////////////////////////
@@ -169,18 +267,15 @@ void runJacobianTest(tesseract_kinematics::ForwardKinematics& kin)
     change_base(1, 1) = 0;
     change_base.translation() = link_point;
 
-    kin.calcFwdKin(pose, jvals, "tool0");
-    // calcJacobian requires the link point to be in the base frame for which the jacobian is calculated.
-    EXPECT_TRUE(kin.calcJacobian(jacobian, jvals, "tool0"));
-    tesseract_kinematics::jacobianChangeBase(jacobian, change_base);
-    tesseract_kinematics::jacobianChangeRefPoint(jacobian, (change_base * pose).linear() * link_point);
-
-    numerical_jacobian.resize(6, 7);
-    tesseract_kinematics::numericalJacobian(numerical_jacobian, change_base, kin, jvals, "tool0", link_point);
-
-    for (int i = 0; i < 6; ++i)
-      for (int j = 0; j < 7; ++j)
-        EXPECT_NEAR(numerical_jacobian(i, j), jacobian(i, j), 1e-3);
+    runJacobianTestHelper(kin, jvals, "base_link", link_point, change_base);
+    runJacobianTestHelper(kin, jvals, "link_1", link_point, change_base);
+    runJacobianTestHelper(kin, jvals, "link_2", link_point, change_base);
+    runJacobianTestHelper(kin, jvals, "link_3", link_point, change_base);
+    runJacobianTestHelper(kin, jvals, "link_4", link_point, change_base);
+    runJacobianTestHelper(kin, jvals, "link_5", link_point, change_base);
+    runJacobianTestHelper(kin, jvals, "link_6", link_point, change_base);
+    runJacobianTestHelper(kin, jvals, "link_7", link_point, change_base);
+    runJacobianTestHelper(kin, jvals, "tool0", link_point, change_base);
   }
 }
 
@@ -266,7 +361,7 @@ void runInvKinTest(const tesseract_kinematics::InverseKinematics& inv_kin,
   EXPECT_TRUE(rot_pose.isApprox(rot_result, 1e-3));
 }
 
-TEST(TesseractKinematicsUnit, KDLKinChainActiveLinkNamesUnit)
+TEST(TesseractKinematicsUnit, KDLKinChainActiveLinkNamesUnit)  // NOLINT
 {
   tesseract_kinematics::KDLFwdKinChain kin;
   tesseract_scene_graph::SceneGraph::Ptr scene_graph = getSceneGraph();
@@ -275,7 +370,7 @@ TEST(TesseractKinematicsUnit, KDLKinChainActiveLinkNamesUnit)
   runActiveLinkNamesTest(kin, false);
 }
 
-TEST(TesseractKinematicsUnit, KDLKinTreeActiveLinkNamesUnit)
+TEST(TesseractKinematicsUnit, KDLKinTreeActiveLinkNamesUnit)  // NOLINT
 {
   tesseract_kinematics::KDLFwdKinTree kin;
   tesseract_scene_graph::SceneGraph::Ptr scene_graph = getSceneGraph();
@@ -296,7 +391,7 @@ TEST(TesseractKinematicsUnit, KDLKinTreeActiveLinkNamesUnit)
   runActiveLinkNamesTest(kin, true);
 }
 
-TEST(TesseractKinematicsUnit, KDLKinChainForwardKinematicUnit)
+TEST(TesseractKinematicsUnit, KDLKinChainForwardKinematicUnit)  // NOLINT
 {
   tesseract_kinematics::KDLFwdKinChain kin;
   tesseract_scene_graph::SceneGraph::Ptr scene_graph = getSceneGraph();
@@ -305,7 +400,7 @@ TEST(TesseractKinematicsUnit, KDLKinChainForwardKinematicUnit)
   runFwdKinTest(kin);
 }
 
-TEST(TesseractKinematicsUnit, KDLKinTreeForwardKinematicUnit)
+TEST(TesseractKinematicsUnit, KDLKinTreeForwardKinematicUnit)  // NOLINT
 {
   tesseract_kinematics::KDLFwdKinTree kin;
   tesseract_scene_graph::SceneGraph::Ptr scene_graph = getSceneGraph();
@@ -326,7 +421,7 @@ TEST(TesseractKinematicsUnit, KDLKinTreeForwardKinematicUnit)
   runFwdKinTest(kin);
 }
 
-TEST(TesseractKinematicsUnit, KDLKinChainJacobianUnit)
+TEST(TesseractKinematicsUnit, KDLKinChainJacobianUnit)  // NOLINT
 {
   tesseract_kinematics::KDLFwdKinChain kin;
   tesseract_scene_graph::SceneGraph::Ptr scene_graph = getSceneGraph();
@@ -335,7 +430,7 @@ TEST(TesseractKinematicsUnit, KDLKinChainJacobianUnit)
   runJacobianTest(kin);
 }
 
-TEST(TesseractKinematicsUnit, KDLKinTreeJacobianUnit)
+TEST(TesseractKinematicsUnit, KDLKinTreeJacobianUnit)  // NOLINT
 {
   tesseract_kinematics::KDLFwdKinTree kin;
   tesseract_scene_graph::SceneGraph::Ptr scene_graph = getSceneGraph();
@@ -356,7 +451,7 @@ TEST(TesseractKinematicsUnit, KDLKinTreeJacobianUnit)
   runJacobianTest(kin);
 }
 
-TEST(TesseractKinematicsUnit, KDLKinChainLMAInverseKinematicUnit)
+TEST(TesseractKinematicsUnit, KDLKinChainLMAInverseKinematicUnit)  // NOLINT
 {
   tesseract_kinematics::KDLInvKinChainLMA inv_kin;
   tesseract_kinematics::KDLFwdKinChain fwd_kin;
@@ -367,7 +462,7 @@ TEST(TesseractKinematicsUnit, KDLKinChainLMAInverseKinematicUnit)
   runInvKinTest(inv_kin, fwd_kin);
 }
 
-TEST(TesseractKinematicsUnit, KDLKinChainNRInverseKinematicUnit)
+TEST(TesseractKinematicsUnit, KDLKinChainNRInverseKinematicUnit)  // NOLINT
 {
   tesseract_kinematics::KDLInvKinChainNR inv_kin;
   tesseract_kinematics::KDLFwdKinChain fwd_kin;

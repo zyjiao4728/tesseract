@@ -25,7 +25,6 @@
  */
 #include <tesseract_common/macros.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
-#include <jsoncpp/json/json.h>
 #include <console_bridge/console.h>
 #include <trajopt/plot_callback.hpp>
 #include <trajopt/problem_description.hpp>
@@ -41,22 +40,53 @@ TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 using namespace trajopt;
 
+static const double LONGEST_VALID_SEGMENT_FRACTION_DEFAULT = 0.01;
+
 namespace tesseract_motion_planners
 {
-TrajOptMotionPlanner::TrajOptMotionPlanner(const std::string& name) : config_(nullptr)
+TrajOptMotionPlannerStatusCategory::TrajOptMotionPlannerStatusCategory(std::string name) : name_(std::move(name)) {}
+const std::string& TrajOptMotionPlannerStatusCategory::name() const noexcept { return name_; }
+std::string TrajOptMotionPlannerStatusCategory::message(int code) const
 {
-  name_ = name;
+  switch (code)
+  {
+    case IsConfigured:
+    {
+      return "Is Configured";
+    }
+    case SolutionFound:
+    {
+      return "Found valid solution";
+    }
+    case IsNotConfigured:
+    {
+      return "Planner is not configured, must call setConfiguration prior to calling solve.";
+    }
+    case FailedToParseConfig:
+    {
+      return "Failed to parse config data";
+    }
+    case FailedToFindValidSolution:
+    {
+      return "Failed to find valid solution";
+    }
+    case FoundValidSolutionInCollision:
+    {
+      return "Found valid solution, but is in collision";
+    }
+    default:
+    {
+      assert(false);
+      return "";
+    }
+  }
+}
 
-  // Success Status Codes
-  status_code_map_[0] = "Found valid solution";
-
-  // TODO: These should be tied to enumeration ints and returned through an getLastErrorMsg() method
-  // Error Status Codes
-  status_code_map_[-1] = "Invalid config data format";
-  status_code_map_[-2] = "Failed to parse config data";
-  status_code_map_[-3] = "Failed to find valid solution";
-  status_code_map_[-4] = "Found valid solution, but is in collision";
-  status_code_map_[-5] = "Planner is not configured, must call setConfiguration prior to calling solve.";
+TrajOptMotionPlanner::TrajOptMotionPlanner(std::string name)
+  : MotionPlanner(std::move(name))
+  , config_(nullptr)
+  , status_category_(std::make_shared<const TrajOptMotionPlannerStatusCategory>(name_))
+{
 }
 
 bool TrajOptMotionPlanner::terminate()
@@ -71,15 +101,21 @@ void TrajOptMotionPlanner::clear()
   config_ = nullptr;
 }
 
-bool TrajOptMotionPlanner::solve(PlannerResponse& response)
+tesseract_common::StatusCode TrajOptMotionPlanner::solve(PlannerResponse& response, bool verbose)
 {
-  if (!isConfigured())
+  tesseract_common::StatusCode config_status = isConfigured();
+  if (!config_status)
   {
-    response.status_code = -5;
-    response.status_description = status_code_map_[response.status_code];
+    response.status = config_status;
     CONSOLE_BRIDGE_logError("Planner %s is not configured", name_.c_str());
-    return false;
+    return config_status;
   }
+
+  // Set Log Level
+  if (verbose)
+    util::gLogLevel = util::LevelDebug;
+  else
+    util::gLogLevel = util::LevelWarn;
 
   // Create optimizer
   sco::BasicTrustRegionSQP opt(config_->prob);
@@ -98,7 +134,28 @@ bool TrajOptMotionPlanner::solve(PlannerResponse& response)
   CONSOLE_BRIDGE_logInform("planning time: %.3f", (boost::posix_time::second_clock::local_time() - tStart).seconds());
 
   // Check and report collisions
+  const Eigen::MatrixX2d& limits = config_->prob->GetKin()->getLimits();
+  double length = 0;
+  double extent = (limits.col(1) - limits.col(0)).norm();
+  if (config_->longest_valid_segment_fraction > 0 && config_->longest_valid_segment_length > 0)
+  {
+    length = std::min(config_->longest_valid_segment_fraction * extent, config_->longest_valid_segment_length);
+  }
+  else if (config_->longest_valid_segment_fraction > 0)
+  {
+    length = config_->longest_valid_segment_fraction * extent;
+  }
+  else if (config_->longest_valid_segment_length > 0)
+  {
+    length = config_->longest_valid_segment_length;
+  }
+  else
+  {
+    length = LONGEST_VALID_SEGMENT_FRACTION_DEFAULT * extent;
+  }
+
   std::vector<tesseract_collision::ContactResultMap> collisions;
+  tesseract_environment::StateSolver::Ptr state_solver = config_->prob->GetEnv()->getStateSolver();
   tesseract_collision::ContinuousContactManager::Ptr continuous_manager =
       config_->prob->GetEnv()->getContinuousContactManager();
   tesseract_environment::AdjacencyMap::Ptr adjacency_map =
@@ -109,55 +166,44 @@ bool TrajOptMotionPlanner::solve(PlannerResponse& response)
   continuous_manager->setActiveCollisionObjects(adjacency_map->getActiveLinkNames());
   continuous_manager->setContactDistanceThreshold(0);
   collisions.clear();
-  bool found = checkTrajectory(*continuous_manager,
-                               *config_->prob->GetEnv(),
+  bool found = checkTrajectory(collisions,
+                               *continuous_manager,
+                               *state_solver,
                                config_->prob->GetKin()->getJointNames(),
                                getTraj(opt.x(), config_->prob->GetVars()),
-                               collisions);
-
-  // Do a discrete check until continuous collision checking is updated to do dynamic-dynamic checking
-  tesseract_collision::DiscreteContactManager::Ptr discrete_manager =
-      config_->prob->GetEnv()->getDiscreteContactManager();
-  discrete_manager->setActiveCollisionObjects(adjacency_map->getActiveLinkNames());
-  discrete_manager->setContactDistanceThreshold(0);
-  collisions.clear();
-
-  found = found || checkTrajectory(*discrete_manager,
-                                   *config_->prob->GetEnv(),
-                                   config_->prob->GetKin()->getJointNames(),
-                                   getTraj(opt.x(), config_->prob->GetVars()),
-                                   collisions);
+                               length,
+                               tesseract_collision::ContactTestType::FIRST,
+                               verbose);
 
   // Send response
-  response.trajectory = getTraj(opt.x(), config_->prob->GetVars());
-  response.joint_names = config_->prob->GetKin()->getJointNames();
-  if (opt.results().status == sco::OptStatus::OPT_PENALTY_ITERATION_LIMIT ||
-      opt.results().status == sco::OptStatus::OPT_FAILED || opt.results().status == sco::OptStatus::INVALID)
+  response.joint_trajectory.trajectory = getTraj(opt.x(), config_->prob->GetVars());
+  response.joint_trajectory.joint_names = config_->prob->GetKin()->getJointNames();
+  if (opt.results().status != sco::OptStatus::OPT_CONVERGED)
   {
-    response.status_code = -3;
-    response.status_description = status_code_map_.at(-3) + ": " + sco::statusToString(opt.results().status);
+    response.status =
+        tesseract_common::StatusCode(TrajOptMotionPlannerStatusCategory::FailedToFindValidSolution, status_category_);
   }
   else if (found)
   {
-    response.status_code = -4;
-    response.status_description = status_code_map_.at(-4);
+    response.status = tesseract_common::StatusCode(TrajOptMotionPlannerStatusCategory::FoundValidSolutionInCollision,
+                                                   status_category_);
   }
   else
   {
+    response.status = tesseract_common::StatusCode(TrajOptMotionPlannerStatusCategory::SolutionFound, status_category_);
     CONSOLE_BRIDGE_logInform("Final trajectory is collision free");
-    response.status_code = 0;
-    response.status_description = status_code_map_.at(0) + ": " + sco::statusToString(opt.results().status);
   }
 
-  return (response.status_code >= 0);
+  return response.status;
 }
 
 bool TrajOptMotionPlanner::solve(PlannerResponse& response, std::vector<double>& cost_vals, std::vector<double>& cnt_viols, double& total_cost)
 {
-  if (!isConfigured())
+  tesseract_common::StatusCode config_status = isConfigured();
+
+  if (!config_status)
   {
-    response.status_code = -5;
-    response.status_description = status_code_map_[response.status_code];
+    response.status = config_status;
     CONSOLE_BRIDGE_logError("Planner %s is not configured", name_.c_str());
     return false;
   }
@@ -179,7 +225,28 @@ bool TrajOptMotionPlanner::solve(PlannerResponse& response, std::vector<double>&
   CONSOLE_BRIDGE_logInform("planning time: %.3f", (boost::posix_time::second_clock::local_time() - tStart).seconds());
 
   // Check and report collisions
+  const Eigen::MatrixX2d& limits = config_->prob->GetKin()->getLimits();
+  double length = 0;
+  double extent = (limits.col(1) - limits.col(0)).norm();
+  if (config_->longest_valid_segment_fraction > 0 && config_->longest_valid_segment_length > 0)
+  {
+    length = std::min(config_->longest_valid_segment_fraction * extent, config_->longest_valid_segment_length);
+  }
+  else if (config_->longest_valid_segment_fraction > 0)
+  {
+    length = config_->longest_valid_segment_fraction * extent;
+  }
+  else if (config_->longest_valid_segment_length > 0)
+  {
+    length = config_->longest_valid_segment_length;
+  }
+  else
+  {
+    length = LONGEST_VALID_SEGMENT_FRACTION_DEFAULT * extent;
+  }
+
   std::vector<tesseract_collision::ContactResultMap> collisions;
+  tesseract_environment::StateSolver::Ptr state_solver = config_->prob->GetEnv()->getStateSolver();
   tesseract_collision::ContinuousContactManager::Ptr continuous_manager =
       config_->prob->GetEnv()->getContinuousContactManager();
   tesseract_environment::AdjacencyMap::Ptr adjacency_map =
@@ -190,59 +257,140 @@ bool TrajOptMotionPlanner::solve(PlannerResponse& response, std::vector<double>&
   continuous_manager->setActiveCollisionObjects(adjacency_map->getActiveLinkNames());
   continuous_manager->setContactDistanceThreshold(0);
   collisions.clear();
-  bool found = checkTrajectory(*continuous_manager,
-                               *config_->prob->GetEnv(),
+  bool found = checkTrajectory(collisions,
+                               *continuous_manager,
+                               *state_solver,
                                config_->prob->GetKin()->getJointNames(),
                                getTraj(opt.x(), config_->prob->GetVars()),
-                               collisions);
+                               length,
+                               tesseract_collision::ContactTestType::FIRST,
+                               false);
 
-  // Do a discrete check until continuous collision checking is updated to do dynamic-dynamic checking
-  tesseract_collision::DiscreteContactManager::Ptr discrete_manager =
-      config_->prob->GetEnv()->getDiscreteContactManager();
-  discrete_manager->setActiveCollisionObjects(adjacency_map->getActiveLinkNames());
-  discrete_manager->setContactDistanceThreshold(0);
-  collisions.clear();
-
-  found = found || checkTrajectory(*discrete_manager,
-                                   *config_->prob->GetEnv(),
-                                   config_->prob->GetKin()->getJointNames(),
-                                   getTraj(opt.x(), config_->prob->GetVars()),
-                                   collisions);
 
   // Send response
-  response.trajectory = getTraj(opt.x(), config_->prob->GetVars());
-  response.joint_names = config_->prob->GetKin()->getJointNames();
-  if (opt.results().status == sco::OptStatus::OPT_PENALTY_ITERATION_LIMIT ||
-      opt.results().status == sco::OptStatus::OPT_FAILED || opt.results().status == sco::OptStatus::INVALID)
+  response.joint_trajectory.trajectory = getTraj(opt.x(), config_->prob->GetVars());
+  response.joint_trajectory.joint_names = config_->prob->GetKin()->getJointNames();
+  if (opt.results().status != sco::OptStatus::OPT_CONVERGED)
   {
-    response.status_code = -3;
-    response.status_description = status_code_map_.at(-3) + ": " + sco::statusToString(opt.results().status);
+    response.status =
+        tesseract_common::StatusCode(TrajOptMotionPlannerStatusCategory::FailedToFindValidSolution, status_category_);
   }
   else if (found)
   {
-    response.status_code = -4;
-    response.status_description = status_code_map_.at(-4);
+    response.status = tesseract_common::StatusCode(TrajOptMotionPlannerStatusCategory::FoundValidSolutionInCollision,
+                                                   status_category_);
   }
   else
   {
+    response.status = tesseract_common::StatusCode(TrajOptMotionPlannerStatusCategory::SolutionFound, status_category_);
     CONSOLE_BRIDGE_logInform("Final trajectory is collision free");
-    response.status_code = 0;
-    response.status_description = status_code_map_.at(0) + ": " + sco::statusToString(opt.results().status);
   }
 
   cost_vals = opt.results().cost_vals;
   cnt_viols = opt.results().cnt_viols;
   total_cost = opt.results().total_cost;
   
-  return (response.status_code >= 0);
+  return (response.status.value() >= 0);
 }
 
-bool TrajOptMotionPlanner::isConfigured() const { return config_ != nullptr; }
 
-bool TrajOptMotionPlanner::setConfiguration(const TrajOptPlannerConfig& config)
+// bool TrajOptMotionPlanner::solve(PlannerResponse& response, std::vector<double>& cost_vals, std::vector<double>& cnt_viols, double& total_cost)
+// {
+//   if (!isConfigured())
+//   {
+//     response.status_code = -5;
+//     response.status_description = status_code_map_[response.status_code];
+//     CONSOLE_BRIDGE_logError("Planner %s is not configured", name_.c_str());
+//     return false;
+//   }
+
+//   // Create optimizer
+//   sco::BasicTrustRegionSQP opt(config_->prob);
+//   opt.setParameters(config_->params);
+//   opt.initialize(trajToDblVec(config_->prob->GetInitTraj()));
+
+//   // Add all callbacks
+//   for (const sco::Optimizer::Callback& callback : config_->callbacks)
+//   {
+//     opt.addCallback(callback);
+//   }
+
+//   // Optimize
+//   auto tStart = boost::posix_time::second_clock::local_time();
+//   opt.optimize();
+//   CONSOLE_BRIDGE_logInform("planning time: %.3f", (boost::posix_time::second_clock::local_time() - tStart).seconds());
+
+//   // Check and report collisions
+//   std::vector<tesseract_collision::ContactResultMap> collisions;
+//   tesseract_collision::ContinuousContactManager::Ptr continuous_manager =
+//       config_->prob->GetEnv()->getContinuousContactManager();
+//   tesseract_environment::AdjacencyMap::Ptr adjacency_map =
+//       std::make_shared<tesseract_environment::AdjacencyMap>(config_->prob->GetEnv()->getSceneGraph(),
+//                                                             config_->prob->GetKin()->getActiveLinkNames(),
+//                                                             config_->prob->GetEnv()->getCurrentState()->transforms);
+
+//   continuous_manager->setActiveCollisionObjects(adjacency_map->getActiveLinkNames());
+//   continuous_manager->setContactDistanceThreshold(0);
+//   collisions.clear();
+//   bool found = checkTrajectory(*continuous_manager,
+//                                *config_->prob->GetEnv(),
+//                                config_->prob->GetKin()->getJointNames(),
+//                                getTraj(opt.x(), config_->prob->GetVars()),
+//                                collisions);
+
+//   // Do a discrete check until continuous collision checking is updated to do dynamic-dynamic checking
+//   tesseract_collision::DiscreteContactManager::Ptr discrete_manager =
+//       config_->prob->GetEnv()->getDiscreteContactManager();
+//   discrete_manager->setActiveCollisionObjects(adjacency_map->getActiveLinkNames());
+//   discrete_manager->setContactDistanceThreshold(0);
+//   collisions.clear();
+
+//   found = found || checkTrajectory(*discrete_manager,
+//                                    *config_->prob->GetEnv(),
+//                                    config_->prob->GetKin()->getJointNames(),
+//                                    getTraj(opt.x(), config_->prob->GetVars()),
+//                                    collisions);
+
+//   // Send response
+//   response.trajectory = getTraj(opt.x(), config_->prob->GetVars());
+//   response.joint_names = config_->prob->GetKin()->getJointNames();
+//   if (opt.results().status == sco::OptStatus::OPT_PENALTY_ITERATION_LIMIT ||
+//       opt.results().status == sco::OptStatus::OPT_FAILED || opt.results().status == sco::OptStatus::INVALID)
+//   {
+//     response.status_code = -3;
+//     response.status_description = status_code_map_.at(-3) + ": " + sco::statusToString(opt.results().status);
+//   }
+//   else if (found)
+//   {
+//     response.status_code = -4;
+//     response.status_description = status_code_map_.at(-4);
+//   }
+//   else
+//   {
+//     CONSOLE_BRIDGE_logInform("Final trajectory is collision free");
+//     response.status_code = 0;
+//     response.status_description = status_code_map_.at(0) + ": " + sco::statusToString(opt.results().status);
+//   }
+
+//   cost_vals = opt.results().cost_vals;
+//   cnt_viols = opt.results().cnt_viols;
+//   total_cost = opt.results().total_cost;
+  
+//   return (response.status_code >= 0);
+// }
+
+tesseract_common::StatusCode TrajOptMotionPlanner::isConfigured() const
 {
-  config_ = std::make_shared<TrajOptPlannerConfig>(config);
-  return true;
+  if (config_ != nullptr && config_->prob != nullptr)
+    return tesseract_common::StatusCode(TrajOptMotionPlannerStatusCategory::IsConfigured, status_category_);
+
+  return tesseract_common::StatusCode(TrajOptMotionPlannerStatusCategory::IsNotConfigured, status_category_);
+}
+
+bool TrajOptMotionPlanner::setConfiguration(TrajOptPlannerConfig::Ptr config)
+{
+  config_ = std::move(config);
+  return config_->generate();
 }
 
 }  // namespace tesseract_motion_planners

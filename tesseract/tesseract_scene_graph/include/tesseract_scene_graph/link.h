@@ -59,7 +59,7 @@ public:
   using Ptr = std::shared_ptr<Material>;
   using ConstPtr = std::shared_ptr<const Material>;
 
-  Material(const std::string& name) : name_(name) { this->clear(); }
+  Material(std::string name) : name_(std::move(name)) { this->clear(); }
 
   const std::string& getName() const { return name_; }
 
@@ -68,13 +68,15 @@ public:
 
   void clear()
   {
-    color.setZero();
+    color = Eigen::Vector4d(0.5, 0.5, 0.5, 1.0);
     texture_filename.clear();
   }
 
 private:
   std::string name_;
 };
+
+static auto DEFAULT_TESSERACT_MATERIAL = std::make_shared<Material>("default_tesseract_material");
 
 class Inertial
 {
@@ -109,14 +111,12 @@ public:
   Eigen::Isometry3d origin;
   tesseract_geometry::Geometry::Ptr geometry;
 
-  std::string material_name;
   Material::Ptr material;
 
   void clear()
   {
     origin.setIdentity();
-    material_name.clear();
-    material.reset();
+    material = DEFAULT_TESSERACT_MATERIAL;
     geometry.reset();
     name.clear();
   }
@@ -152,7 +152,7 @@ public:
   using Ptr = std::shared_ptr<Link>;
   using ConstPtr = std::shared_ptr<const Link>;
 
-  Link(std::string name) : name_(name) { this->clear(); }
+  Link(std::string name) : name_(std::move(name)) { this->clear(); }
 
   const std::string& getName() const { return name_; }
 

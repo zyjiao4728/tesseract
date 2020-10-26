@@ -37,6 +37,7 @@ TESSERACT_COMMON_IGNORE_WARNINGS_POP
 #include <trajopt/problem_description.hpp>
 #include <trajopt_utils/config.hpp>
 #include <trajopt_utils/logging.hpp>
+#include <tesseract_geometry/mesh_parser.h>
 #include <memory>
 
 using namespace trajopt;
@@ -55,10 +56,10 @@ const std::string MODIFY_ENVIRONMENT_SERVICE = "modify_tesseract_rviz";
 
 namespace tesseract_ros_examples
 {
-CarSeatExample::CarSeatExample(ros::NodeHandle nh, bool plotting, bool rviz)
+CarSeatExample::CarSeatExample(const ros::NodeHandle& nh, bool plotting, bool rviz)
   : Example(plotting, rviz), nh_(nh), env_current_revision_(0)
 {
-  locator_ = tesseract_rosutils::locateResource;
+  locator_ = std::make_shared<tesseract_rosutils::ROSResourceLocator>();
 }
 
 void CarSeatExample::addSeats()
@@ -69,16 +70,23 @@ void CarSeatExample::addSeats()
 
     Visual::Ptr visual = std::make_shared<Visual>();
     visual->origin = Eigen::Isometry3d::Identity();
-    visual->geometry = createMeshFromPath<tesseract_geometry::Mesh>(locator_("package://tesseract_ros_examples/meshes/"
-                                                                             "car_seat/visual/seat.dae"),
-                                                                    Eigen::Vector3d(1, 1, 1),
-                                                                    true)[0];
+    visual->geometry =
+        tesseract_geometry::createMeshFromResource<tesseract_geometry::Mesh>(locator_->locateResource("package://"
+                                                                                                      "tesseract_ros_"
+                                                                                                      "examples/meshes/"
+                                                                                                      "car_seat/visual/"
+                                                                                                      "seat.dae"),
+                                                                             Eigen::Vector3d(1, 1, 1),
+                                                                             true)[0];
     link_seat.visual.push_back(visual);
 
     for (int m = 1; m <= 10; ++m)
     {
-      std::vector<tesseract_geometry::Mesh::Ptr> meshes = createMeshFromPath<tesseract_geometry::Mesh>(
-          locator_("package://tesseract_ros_examples/meshes/car_seat/collision/seat_" + std::to_string(m) + ".stl"));
+      std::vector<tesseract_geometry::Mesh::Ptr> meshes =
+          tesseract_geometry::createMeshFromResource<tesseract_geometry::Mesh>(
+              locator_->locateResource("package://tesseract_ros_examples/"
+                                       "meshes/car_seat/collision/seat_" +
+                                       std::to_string(m) + ".stl"));
       for (auto& mesh : meshes)
       {
         Collision::Ptr collision = std::make_shared<Collision>();
@@ -254,7 +262,7 @@ std::shared_ptr<ProblemConstructionInfo> CarSeatExample::cppMethod(const std::st
         Eigen::VectorXd::LinSpaced(pci->basic_info.n_steps, start_pos[i], joint_pose[static_cast<size_t>(i)]);
 
   // Populate Cost Info
-  std::shared_ptr<JointVelTermInfo> joint_vel = std::shared_ptr<JointVelTermInfo>(new JointVelTermInfo);
+  auto joint_vel = std::make_shared<JointVelTermInfo>();
   joint_vel->coeffs = std::vector<double>(8, 1.0);
   joint_vel->targets = std::vector<double>(8, 0.0);
   joint_vel->first_step = 0;
@@ -263,7 +271,7 @@ std::shared_ptr<ProblemConstructionInfo> CarSeatExample::cppMethod(const std::st
   joint_vel->term_type = TT_COST;
   pci->cost_infos.push_back(joint_vel);
 
-  std::shared_ptr<JointAccTermInfo> joint_acc = std::shared_ptr<JointAccTermInfo>(new JointAccTermInfo);
+  auto joint_acc = std::make_shared<JointAccTermInfo>();
   joint_acc->coeffs = std::vector<double>(8, 5.0);
   joint_acc->targets = std::vector<double>(8, 0.0);
   joint_acc->first_step = 0;
@@ -272,7 +280,7 @@ std::shared_ptr<ProblemConstructionInfo> CarSeatExample::cppMethod(const std::st
   joint_acc->term_type = TT_COST;
   pci->cost_infos.push_back(joint_acc);
 
-  std::shared_ptr<JointJerkTermInfo> joint_jerk = std::shared_ptr<JointJerkTermInfo>(new JointJerkTermInfo);
+  auto joint_jerk = std::make_shared<JointJerkTermInfo>();
   joint_jerk->coeffs = std::vector<double>(8, 5.0);
   joint_jerk->targets = std::vector<double>(8, 0.0);
   joint_jerk->first_step = 0;
@@ -281,13 +289,12 @@ std::shared_ptr<ProblemConstructionInfo> CarSeatExample::cppMethod(const std::st
   joint_jerk->term_type = TT_COST;
   pci->cost_infos.push_back(joint_jerk);
 
-  std::shared_ptr<CollisionTermInfo> collision = std::shared_ptr<CollisionTermInfo>(new CollisionTermInfo);
+  auto collision = std::make_shared<CollisionTermInfo>();
   collision->name = "collision";
   collision->term_type = TT_CNT;
   collision->continuous = true;
   collision->first_step = 0;
   collision->last_step = pci->basic_info.n_steps - 2;
-  collision->gap = 1;
   collision->info = createSafetyMarginDataVector(pci->basic_info.n_steps, 0.0001, 40);
   pci->cnt_infos.push_back(collision);
 
@@ -352,7 +359,7 @@ bool CarSeatExample::run()
   tesseract_->getEnvironment()->setState(saved_positions_["Home"]);
 
   // Set Log Level
-  util::gLogLevel = util::LevelDebug;
+  util::gLogLevel = util::LevelError;
 
   // Solve Trajectory
   ROS_INFO("Car Seat Demo Started");
@@ -380,6 +387,7 @@ bool CarSeatExample::run()
   plotter->plotTrajectory(prob->GetKin()->getJointNames(), getTraj(pick1_opt.x(), prob->GetVars()));
 
   std::vector<ContactResultMap> collisions;
+  tesseract_environment::StateSolver::Ptr state_solver = prob->GetEnv()->getStateSolver();
   ContinuousContactManager::Ptr manager = prob->GetEnv()->getContinuousContactManager();
   AdjacencyMap::Ptr adjacency_map =
       std::make_shared<tesseract_environment::AdjacencyMap>(prob->GetEnv()->getSceneGraph(),
@@ -390,7 +398,7 @@ bool CarSeatExample::run()
   manager->setContactDistanceThreshold(0);
 
   bool found = checkTrajectory(
-      *manager, *prob->GetEnv(), prob->GetKin()->getJointNames(), getTraj(pick1_opt.x(), prob->GetVars()), collisions);
+      collisions, *manager, *state_solver, prob->GetKin()->getJointNames(), getTraj(pick1_opt.x(), prob->GetVars()));
 
   ROS_INFO((found) ? ("Pick seat #1 trajectory is in collision") : ("Pick seat #1 trajectory is collision free"));
 
@@ -450,7 +458,7 @@ bool CarSeatExample::run()
   manager->setContactDistanceThreshold(0);
   collisions.clear();
   found = checkTrajectory(
-      *manager, *prob->GetEnv(), prob->GetKin()->getJointNames(), getTraj(place1_opt.x(), prob->GetVars()), collisions);
+      collisions, *manager, *state_solver, prob->GetKin()->getJointNames(), getTraj(place1_opt.x(), prob->GetVars()));
 
   ROS_INFO((found) ? ("Place seat #1 trajectory is in collision") : ("Place seat #1 trajectory is collision free"));
 
@@ -503,7 +511,7 @@ bool CarSeatExample::run()
   manager->setContactDistanceThreshold(0);
   collisions.clear();
   found = checkTrajectory(
-      *manager, *prob->GetEnv(), prob->GetKin()->getJointNames(), getTraj(pick2_opt.x(), prob->GetVars()), collisions);
+      collisions, *manager, *state_solver, prob->GetKin()->getJointNames(), getTraj(pick2_opt.x(), prob->GetVars()));
 
   ROS_INFO((found) ? ("Pick seat #2 trajectory is in collision") : ("Pick seat #2 trajectory is collision free"));
 

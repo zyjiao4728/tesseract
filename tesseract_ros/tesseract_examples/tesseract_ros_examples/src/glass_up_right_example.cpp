@@ -65,7 +65,7 @@ TrajOptProb::Ptr GlassUpRightExample::jsonMethod()
 
   Json::Value root;
   Json::Reader reader;
-  bool parse_success = reader.parse(trajopt_config.c_str(), root);
+  bool parse_success = reader.parse(trajopt_config, root);
   if (!parse_success)
   {
     ROS_FATAL("Failed to load trajopt json file from ros parameter");
@@ -110,7 +110,7 @@ TrajOptProb::Ptr GlassUpRightExample::cppMethod()
   }
 
   // Populate Cost Info
-  std::shared_ptr<JointVelTermInfo> jv = std::shared_ptr<JointVelTermInfo>(new JointVelTermInfo);
+  auto jv = std::make_shared<JointVelTermInfo>();
   jv->coeffs = std::vector<double>(7, 1.0);
   jv->targets = std::vector<double>(7, 0.0);
   jv->first_step = 0;
@@ -119,13 +119,12 @@ TrajOptProb::Ptr GlassUpRightExample::cppMethod()
   jv->term_type = TT_COST;
   pci.cost_infos.push_back(jv);
 
-  std::shared_ptr<CollisionTermInfo> collision = std::shared_ptr<CollisionTermInfo>(new CollisionTermInfo);
+  auto collision = std::make_shared<CollisionTermInfo>();
   collision->name = "collision";
   collision->term_type = TT_COST;
   collision->continuous = false;
   collision->first_step = 0;
   collision->last_step = pci.basic_info.n_steps - 1;
-  collision->gap = 1;
   collision->info = createSafetyMarginDataVector(pci.basic_info.n_steps, 0.025, 20);
   for (auto& info : collision->info)
   {
@@ -139,7 +138,7 @@ TrajOptProb::Ptr GlassUpRightExample::cppMethod()
   double delta = 0.5 / pci.basic_info.n_steps;
   for (auto i = 0; i < pci.basic_info.n_steps; ++i)
   {
-    std::shared_ptr<CartPoseTermInfo> pose = std::shared_ptr<CartPoseTermInfo>(new CartPoseTermInfo);
+    auto pose = std::make_shared<CartPoseTermInfo>();
     pose->term_type = TT_CNT;
     pose->name = "waypoint_cart_" + std::to_string(i);
     pose->link = "tool0";
@@ -169,7 +168,7 @@ bool GlassUpRightExample::run()
   nh_.getParam(ROBOT_DESCRIPTION_PARAM, urdf_xml_string);
   nh_.getParam(ROBOT_SEMANTIC_PARAM, srdf_xml_string);
 
-  ResourceLocatorFn locator = tesseract_rosutils::locateResource;
+  ResourceLocator::Ptr locator = std::make_shared<tesseract_rosutils::ROSResourceLocator>();
   if (!tesseract_->init(urdf_xml_string, srdf_xml_string, locator))
     return false;
 
@@ -231,7 +230,7 @@ bool GlassUpRightExample::run()
   //  plotter->plotScene();
 
   // Set Log Level
-  util::gLogLevel = util::LevelInfo;
+  util::gLogLevel = util::LevelError;
 
   // Setup Problem
   TrajOptProb::Ptr prob;
@@ -244,6 +243,7 @@ bool GlassUpRightExample::run()
   ROS_INFO("glass upright plan example");
 
   std::vector<ContactResultMap> collisions;
+  tesseract_environment::StateSolver::Ptr state_solver = prob->GetEnv()->getStateSolver();
   ContinuousContactManager::Ptr manager = prob->GetEnv()->getContinuousContactManager();
   AdjacencyMap::Ptr adjacency_map =
       std::make_shared<tesseract_environment::AdjacencyMap>(prob->GetEnv()->getSceneGraph(),
@@ -254,7 +254,7 @@ bool GlassUpRightExample::run()
   manager->setContactDistanceThreshold(0);
   collisions.clear();
   bool found =
-      checkTrajectory(*manager, *prob->GetEnv(), prob->GetKin()->getJointNames(), prob->GetInitTraj(), collisions);
+      checkTrajectory(collisions, *manager, *state_solver, prob->GetKin()->getJointNames(), prob->GetInitTraj());
 
   ROS_INFO((found) ? ("Initial trajectory is in collision") : ("Initial trajectory is collision free"));
 
@@ -303,7 +303,7 @@ bool GlassUpRightExample::run()
 
   collisions.clear();
   found = checkTrajectory(
-      *manager, *prob->GetEnv(), prob->GetKin()->getJointNames(), getTraj(opt.x(), prob->GetVars()), collisions);
+      collisions, *manager, *state_solver, prob->GetKin()->getJointNames(), getTraj(opt.x(), prob->GetVars()));
 
   ROS_INFO((found) ? ("Final trajectory is in collision") : ("Final trajectory is collision free"));
 

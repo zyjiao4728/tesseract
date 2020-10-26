@@ -35,7 +35,7 @@ TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 namespace tesseract_scene_graph
 {
-SceneGraph::SceneGraph() : Graph(), acm_(std::make_shared<AllowedCollisionMatrix>()) {}
+SceneGraph::SceneGraph() : acm_(std::make_shared<AllowedCollisionMatrix>()) {}
 
 void SceneGraph::setName(const std::string& name)
 {
@@ -74,6 +74,11 @@ bool SceneGraph::addLink(Link link)
   VertexProperty info(link_ptr);
   Vertex v = boost::add_vertex(info, static_cast<Graph&>(*this));
   link_map_[link_ptr->getName()] = std::make_pair(link_ptr, v);
+
+  // First link added set as root
+  if (link_map_.size() == 1)
+    setRoot(link_ptr->getName());
+
   return true;
 }
 
@@ -317,7 +322,7 @@ std::vector<Joint::ConstPtr> SceneGraph::getInboundJoints(const std::string& lin
   Vertex vertex = getVertex(link_name);
 
   // Get incomming edges
-  int num_in_edges = static_cast<int>(boost::in_degree(vertex, *this));
+  auto num_in_edges = static_cast<int>(boost::in_degree(vertex, *this));
   if (num_in_edges == 0)  // The root of the tree will have not incoming edges
     return joints;
 
@@ -337,7 +342,7 @@ std::vector<Joint::ConstPtr> SceneGraph::getOutboundJoints(const std::string& li
   Vertex vertex = getVertex(link_name);
 
   // Get incomming edges
-  int num_out_edges = static_cast<int>(boost::out_degree(vertex, *this));
+  auto num_out_edges = static_cast<int>(boost::out_degree(vertex, *this));
   if (num_out_edges == 0)
     return joints;
 
@@ -353,7 +358,7 @@ std::vector<Joint::ConstPtr> SceneGraph::getOutboundJoints(const std::string& li
 
 bool SceneGraph::isAcyclic() const
 {
-  const Graph& graph = static_cast<const Graph&>(*this);
+  const auto& graph = static_cast<const Graph&>(*this);
   bool acyclic = true;
 
   std::map<Vertex, size_t> index_map;
@@ -371,7 +376,7 @@ bool SceneGraph::isAcyclic() const
 
 bool SceneGraph::isTree() const
 {
-  const Graph& graph = static_cast<const Graph&>(*this);
+  const auto& graph = static_cast<const Graph&>(*this);
   bool tree = true;
 
   std::map<Vertex, size_t> index_map;
@@ -419,13 +424,13 @@ std::vector<std::string> SceneGraph::getLinkChildrenNames(const std::string& nam
 
 std::vector<std::string> SceneGraph::getJointChildrenNames(const std::string& name) const
 {
-  const Graph& graph = static_cast<const Graph&>(*this);
+  const auto& graph = static_cast<const Graph&>(*this);
   Edge e = getEdge(name);
   Vertex v = boost::target(e, graph);
   return getLinkChildrenHelper(v);
 }
 
-void SceneGraph::saveDOT(std::string path) const
+void SceneGraph::saveDOT(const std::string& path) const
 {
   std::ofstream dot_file(path);
 
@@ -436,7 +441,7 @@ void SceneGraph::saveDOT(std::string path) const
            << "  edge[style=\"bold\"]\n"
            << "  node[shape=\"circle\"]\n";
 
-  const Graph& graph = static_cast<const Graph&>(*this);
+  const auto& graph = static_cast<const Graph&>(*this);
   Graph::edge_iterator ei, ei_end;
   for (boost::tie(ei, ei_end) = boost::edges(graph); ei != ei_end; ++ei)
   {
@@ -454,7 +459,7 @@ void SceneGraph::saveDOT(std::string path) const
 
 SceneGraph::Path SceneGraph::getShortestPath(const std::string& root, const std::string& tip)
 {
-  const Graph& graph = static_cast<const Graph&>(*this);
+  const auto& graph = static_cast<const Graph&>(*this);
   Vertex s = getVertex(root);
 
   std::map<Vertex, Vertex> predicessor_map;
@@ -483,7 +488,7 @@ SceneGraph::Path SceneGraph::getShortestPath(const std::string& root, const std:
                           prop_distance_map,
                           prop_weight_map,
                           prop_index_map,
-                          std::less<double>(),
+                          std::less<>(),
                           boost::closed_plus<double>(),
                           (std::numeric_limits<double>::max)(),
                           0,
@@ -539,7 +544,7 @@ SceneGraph::Edge SceneGraph::getEdge(const std::string& name) const
 {
   auto found = joint_map_.find(name);
   if (found == joint_map_.end())
-    return Edge();
+    return Edge{};
 
   return found->second.second;
 }

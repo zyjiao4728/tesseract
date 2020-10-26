@@ -138,6 +138,9 @@ public:
 
   /**
    * @brief Adds a link to the graph
+   *
+   * The first link added to the graph is set as the root by default. Use setRoot to change the root link of the graph.
+   *
    * @param link The link to be added to the graph
    * @return Return False if a link with the same name allready exists, otherwise true
    */
@@ -311,7 +314,7 @@ public:
 
   /**
    * @brief Determine if the graph contains cycles
-   * @return True if graph is acyclic otherwise false
+   * @return True if graph is acyclic (no cycles) otherwise false
    */
   bool isAcyclic() const;
 
@@ -353,7 +356,7 @@ public:
    * @brief Saves Graph as Graph Description Language (DOT)
    * @param path The file path
    */
-  void saveDOT(std::string path) const;
+  void saveDOT(const std::string& path) const;
 
   Path getShortestPath(const std::string& root, const std::string& tip);
 
@@ -404,7 +407,7 @@ private:
     template <class u, class g>
     void discover_vertex(u vertex, g graph)
     {
-      int num_in_edges = static_cast<int>(boost::in_degree(vertex, graph));
+      auto num_in_edges = static_cast<int>(boost::in_degree(vertex, graph));
 
       if (num_in_edges > 1)
       {
@@ -438,7 +441,6 @@ private:
     void discover_vertex(u vertex, g graph)
     {
       children_.push_back(boost::get(boost::vertex_link, graph)[vertex]->getName());
-      return;
     }
 
   protected:
@@ -455,7 +457,7 @@ private:
    */
   std::vector<std::string> getLinkChildrenHelper(Vertex start_vertex) const
   {
-    const Graph& graph = static_cast<const Graph&>(*this);
+    const auto& graph = static_cast<const Graph&>(*this);
     std::vector<std::string> child_link_names;
 
     std::map<Vertex, size_t> index_map;
@@ -477,11 +479,11 @@ private:
 inline std::ostream& operator<<(std::ostream& os, const SceneGraph::Path& path)
 {
   os << "Links:" << std::endl;
-  for (auto l : path.first)
+  for (const auto& l : path.first)
     os << "  " << l << std::endl;
 
   os << "Joints:" << std::endl;
-  for (auto j : path.second)
+  for (const auto& j : path.second)
     os << "  " << j << std::endl;
 
   return os;

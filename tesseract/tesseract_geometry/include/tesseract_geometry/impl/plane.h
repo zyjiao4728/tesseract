@@ -43,13 +43,17 @@ public:
 
   Plane(double a, double b, double c, double d) : Geometry(GeometryType::PLANE), a_(a), b_(b), c_(c), d_(d) {}
   ~Plane() override = default;
+  Plane(const Plane&) = delete;
+  Plane& operator=(const Plane&) = delete;
+  Plane(Plane&&) = delete;
+  Plane& operator=(Plane&&) = delete;
 
   double getA() const { return a_; }
   double getB() const { return b_; }
   double getC() const { return c_; }
   double getD() const { return d_; }
 
-  Geometry::Ptr clone() const override { return Plane::Ptr(new Plane(a_, b_, c_, d_)); }
+  Geometry::Ptr clone() const override { return std::make_shared<Plane>(a_, b_, c_, d_); }
 
 private:
   double a_;

@@ -45,9 +45,12 @@ namespace tesseract_collision
 {
 namespace tesseract_collision_bullet
 {
+static const CollisionShapesConst EMPTY_COLLISION_SHAPES_CONST;
+static const tesseract_common::VectorIsometry3d EMPTY_COLLISION_SHAPES_TRANSFORMS;
+
 BulletDiscreteSimpleManager::BulletDiscreteSimpleManager()
 {
-  dispatcher_.reset(new btCollisionDispatcher(&coll_config_));
+  dispatcher_ = std::make_unique<btCollisionDispatcher>(&coll_config_);
 
   dispatcher_->registerCollisionCreateFunc(
       BOX_SHAPE_PROXYTYPE,
@@ -81,7 +84,7 @@ DiscreteContactManager::Ptr BulletDiscreteSimpleManager::clone() const
   manager->setContactDistanceThreshold(contact_distance_);
   manager->setIsContactAllowedFn(fn_);
 
-  return manager;
+  return std::move(manager);
 }
 
 bool BulletDiscreteSimpleManager::addCollisionObject(const std::string& name,
@@ -96,10 +99,23 @@ bool BulletDiscreteSimpleManager::addCollisionObject(const std::string& name,
     addCollisionObject(new_cow);
     return true;
   }
-  else
-  {
-    return false;
-  }
+
+  return false;
+}
+
+const CollisionShapesConst& BulletDiscreteSimpleManager::getCollisionObjectGeometries(const std::string& name) const
+{
+  auto cow = link2cow_.find(name);
+  return (link2cow_.find(name) != link2cow_.end()) ? cow->second->getCollisionGeometries() :
+                                                     EMPTY_COLLISION_SHAPES_CONST;
+}
+
+const tesseract_common::VectorIsometry3d&
+BulletDiscreteSimpleManager::getCollisionObjectGeometriesTransforms(const std::string& name) const
+{
+  auto cow = link2cow_.find(name);
+  return (link2cow_.find(name) != link2cow_.end()) ? cow->second->getCollisionGeometriesTransforms() :
+                                                     EMPTY_COLLISION_SHAPES_TRANSFORMS;
 }
 
 bool BulletDiscreteSimpleManager::hasCollisionObject(const std::string& name) const
@@ -175,7 +191,7 @@ void BulletDiscreteSimpleManager::setActiveCollisionObjects(const std::vector<st
   {
     COW::Ptr& cow = co.second;
 
-    updateCollisionObjectFilters(active_, *cow, false);
+    updateCollisionObjectFilters(active_, *cow);
 
     // Update collision object vector
     if (cow->m_collisionFilterGroup == btBroadphaseProxy::KinematicFilter)
@@ -216,7 +232,7 @@ void BulletDiscreteSimpleManager::contactTest(ContactResultMap& collisions, cons
 
     btCollisionObjectWrapper obA(nullptr, cow1->getCollisionShape(), cow1.get(), cow1->getWorldTransform(), -1, -1);
 
-    DiscreteCollisionCollector cc(cdata, cow1, static_cast<double>(cow1->getContactProcessingThreshold()));
+    DiscreteCollisionCollector cc(cdata, cow1, cow1->getContactProcessingThreshold());
     for (auto cow2_iter = cow1_iter + 1; cow2_iter != cows_.end(); cow2_iter++)
     {
       assert(!cdata.done);

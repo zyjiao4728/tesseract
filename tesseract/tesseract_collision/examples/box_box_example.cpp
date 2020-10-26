@@ -100,20 +100,27 @@ int main(int /*argc*/, char** /*argv*/)
 
   CONSOLE_BRIDGE_logInform("Test object is out side the contact distance");
   location["box_link"].translation() = Eigen::Vector3d(1.60, 0, 0);
+  result = ContactResultMap();
   result.clear();
   result_vector.clear();
 
   checker.setCollisionObjectsTransform(location);
+
+  // Check for collision after moving object
   checker.contactTest(result, ContactTestType::CLOSEST);
   flattenResults(std::move(result), result_vector);
 
   CONSOLE_BRIDGE_logInform("Has collision: %s", toString(result_vector.empty()).c_str());
 
   CONSOLE_BRIDGE_logInform("Test object inside the contact distance");
+  result = ContactResultMap();
   result.clear();
   result_vector.clear();
 
+  // Set higher contact distance threshold
   checker.setContactDistanceThreshold(0.25);
+
+  // Check for contact with new threshold
   checker.contactTest(result, ContactTestType::CLOSEST);
   flattenResults(std::move(result), result_vector);
 

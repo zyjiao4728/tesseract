@@ -32,12 +32,14 @@ namespace tesseract_environment
 {
 void Environment::setState(const std::unordered_map<std::string, double>& joints)
 {
+  std::lock_guard<std::mutex> lock(mutex_);
   state_solver_->setState(joints);
   currentStateChanged();
 }
 
 void Environment::setState(const std::vector<std::string>& joint_names, const std::vector<double>& joint_values)
 {
+  std::lock_guard<std::mutex> lock(mutex_);
   state_solver_->setState(joint_names, joint_values);
   currentStateChanged();
 }
@@ -45,28 +47,36 @@ void Environment::setState(const std::vector<std::string>& joint_names, const st
 void Environment::setState(const std::vector<std::string>& joint_names,
                            const Eigen::Ref<const Eigen::VectorXd>& joint_values)
 {
+  std::lock_guard<std::mutex> lock(mutex_);
   state_solver_->setState(joint_names, joint_values);
   currentStateChanged();
 }
 
 EnvState::Ptr Environment::getState(const std::unordered_map<std::string, double>& joints) const
 {
-  return state_solver_->getState(joints);
+  std::lock_guard<std::mutex> lock(mutex_);
+  EnvState::Ptr state = state_solver_->getState(joints);
+  return state;
 }
 
 EnvState::Ptr Environment::getState(const std::vector<std::string>& joint_names,
                                     const std::vector<double>& joint_values) const
 {
-  return state_solver_->getState(joint_names, joint_values);
+  std::lock_guard<std::mutex> lock(mutex_);
+  EnvState::Ptr state = state_solver_->getState(joint_names, joint_values);
+  return state;
 }
 
 EnvState::Ptr Environment::getState(const std::vector<std::string>& joint_names,
                                     const Eigen::Ref<const Eigen::VectorXd>& joint_values) const
 {
-  return state_solver_->getState(joint_names, joint_values);
+  std::lock_guard<std::mutex> lock(mutex_);
+  EnvState::Ptr state = state_solver_->getState(joint_names, joint_values);
+
+  return state;
 }
 
-bool Environment::addLink(tesseract_scene_graph::Link link)
+bool Environment::addLink(const tesseract_scene_graph::Link& link)
 {
   std::string joint_name = "joint_" + link.getName();
   tesseract_scene_graph::Joint joint(joint_name);
@@ -77,8 +87,9 @@ bool Environment::addLink(tesseract_scene_graph::Link link)
   return addLink(link, joint);
 }
 
-bool Environment::addLink(tesseract_scene_graph::Link link, tesseract_scene_graph::Joint joint)
+bool Environment::addLink(const tesseract_scene_graph::Link& link, const tesseract_scene_graph::Joint& joint)
 {
+  std::lock_guard<std::mutex> lock(mutex_);
   if (scene_graph_->getLink(link.getName()) != nullptr)
   {
     CONSOLE_BRIDGE_logWarn("Tried to add link (%s) with same name as an existing link.", link.getName().c_str());
@@ -97,7 +108,7 @@ bool Environment::addLink(tesseract_scene_graph::Link link, tesseract_scene_grap
   if (!scene_graph_->addJoint(joint))
     return false;
 
-  if (link.collision.size() > 0)
+  if (!link.collision.empty())
   {
     tesseract_collision::CollisionShapesConst shapes;
     tesseract_common::VectorIsometry3d shape_poses;
@@ -120,6 +131,7 @@ bool Environment::addLink(tesseract_scene_graph::Link link, tesseract_scene_grap
 
 bool Environment::removeLink(const std::string& name)
 {
+  std::lock_guard<std::mutex> lock(mutex_);
   if (!removeLinkHelper(name))
     return false;
 
@@ -133,6 +145,7 @@ bool Environment::removeLink(const std::string& name)
 
 bool Environment::moveLink(tesseract_scene_graph::Joint joint)
 {
+  std::lock_guard<std::mutex> lock(mutex_);
   std::vector<tesseract_scene_graph::Joint::ConstPtr> joints = scene_graph_->getInboundJoints(joint.child_link_name);
   assert(joints.size() == 1);
   if (!scene_graph_->removeJoint(joints[0]->getName()))
@@ -151,11 +164,14 @@ bool Environment::moveLink(tesseract_scene_graph::Joint joint)
 
 tesseract_scene_graph::Link::ConstPtr Environment::getLink(const std::string& name) const
 {
-  return scene_graph_->getLink(name);
+  std::lock_guard<std::mutex> lock(mutex_);
+  tesseract_scene_graph::Link::ConstPtr link = scene_graph_->getLink(name);
+  return link;
 }
 
 bool Environment::removeJoint(const std::string& name)
 {
+  std::lock_guard<std::mutex> lock(mutex_);
   if (scene_graph_->getJoint(name) == nullptr)
   {
     CONSOLE_BRIDGE_logWarn("Tried to remove Joint (%s) that does not exist", name.c_str());
@@ -177,6 +193,7 @@ bool Environment::removeJoint(const std::string& name)
 
 bool Environment::moveJoint(const std::string& joint_name, const std::string& parent_link)
 {
+  std::lock_guard<std::mutex> lock(mutex_);
   if (!scene_graph_->moveJoint(joint_name, parent_link))
     return false;
 
@@ -190,6 +207,7 @@ bool Environment::moveJoint(const std::string& joint_name, const std::string& pa
 
 bool Environment::changeJointOrigin(const std::string& joint_name, const Eigen::Isometry3d& new_origin)
 {
+  std::lock_guard<std::mutex> lock(mutex_);
   if (!scene_graph_->changeJointOrigin(joint_name, new_origin))
     return false;
 
@@ -203,6 +221,7 @@ bool Environment::changeJointOrigin(const std::string& joint_name, const Eigen::
 
 void Environment::setLinkCollisionEnabled(const std::string& name, bool enabled)
 {
+  std::lock_guard<std::mutex> lock(mutex_);
   if (discrete_manager_ != nullptr)
   {
     if (enabled)
@@ -227,23 +246,34 @@ void Environment::setLinkCollisionEnabled(const std::string& name, bool enabled)
 
 bool Environment::getLinkCollisionEnabled(const std::string& name) const
 {
-  return scene_graph_->getLinkCollisionEnabled(name);
+  std::lock_guard<std::mutex> lock(mutex_);
+  bool enabled = scene_graph_->getLinkCollisionEnabled(name);
+
+  return enabled;
 }
 
 void Environment::setLinkVisibility(const std::string& name, bool visibility)
 {
+  std::lock_guard<std::mutex> lock(mutex_);
   scene_graph_->setLinkVisibility(name, visibility);
 
   ++revision_;
   commands_.push_back(std::make_shared<ChangeLinkVisibilityCommand>(name, visibility));
 }
 
-bool Environment::getLinkVisibility(const std::string& name) const { return scene_graph_->getLinkVisibility(name); }
+bool Environment::getLinkVisibility(const std::string& name) const
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  bool visible = scene_graph_->getLinkVisibility(name);
+
+  return visible;
+}
 
 void Environment::addAllowedCollision(const std::string& link_name1,
                                       const std::string& link_name2,
                                       const std::string& reason)
 {
+  std::lock_guard<std::mutex> lock(mutex_);
   scene_graph_->addAllowedCollision(link_name1, link_name2, reason);
 
   ++revision_;
@@ -252,6 +282,7 @@ void Environment::addAllowedCollision(const std::string& link_name1,
 
 void Environment::removeAllowedCollision(const std::string& link_name1, const std::string& link_name2)
 {
+  std::lock_guard<std::mutex> lock(mutex_);
   scene_graph_->removeAllowedCollision(link_name1, link_name2);
 
   ++revision_;
@@ -260,6 +291,7 @@ void Environment::removeAllowedCollision(const std::string& link_name1, const st
 
 void Environment::removeAllowedCollision(const std::string& link_name)
 {
+  std::lock_guard<std::mutex> lock(mutex_);
   scene_graph_->removeAllowedCollision(link_name);
 
   ++revision_;
@@ -268,50 +300,73 @@ void Environment::removeAllowedCollision(const std::string& link_name)
 
 tesseract_scene_graph::AllowedCollisionMatrix::ConstPtr Environment::getAllowedCollisionMatrix() const
 {
-  return scene_graph_->getAllowedCollisionMatrix();
+  std::lock_guard<std::mutex> lock(mutex_);
+  tesseract_scene_graph::AllowedCollisionMatrix::ConstPtr acm = scene_graph_->getAllowedCollisionMatrix();
+
+  return acm;
 }
 
 tesseract_scene_graph::Joint::ConstPtr Environment::getJoint(const std::string& name) const
 {
-  return scene_graph_->getJoint(name);
+  std::lock_guard<std::mutex> lock(mutex_);
+  tesseract_scene_graph::Joint::ConstPtr joint = scene_graph_->getJoint(name);
+
+  return joint;
 }
 
 Eigen::VectorXd Environment::getCurrentJointValues() const
 {
+  std::lock_guard<std::mutex> lock(mutex_);
   Eigen::VectorXd jv;
   jv.resize(static_cast<long int>(active_joint_names_.size()));
   for (auto j = 0u; j < active_joint_names_.size(); ++j)
   {
     jv(j) = current_state_->joints[active_joint_names_[j]];
   }
+
   return jv;
 }
 
 Eigen::VectorXd Environment::getCurrentJointValues(const std::vector<std::string>& joint_names) const
 {
+  std::lock_guard<std::mutex> lock(mutex_);
   Eigen::VectorXd jv;
   jv.resize(static_cast<long int>(joint_names.size()));
   for (auto j = 0u; j < joint_names.size(); ++j)
   {
     jv(j) = current_state_->joints[joint_names[j]];
   }
+
   return jv;
 }
 
 tesseract_common::VectorIsometry3d Environment::getLinkTransforms() const
 {
+  std::lock_guard<std::mutex> lock(mutex_);
   tesseract_common::VectorIsometry3d link_tfs;
   link_tfs.resize(link_names_.size());
   for (const auto& link_name : link_names_)
   {
     link_tfs.push_back(current_state_->transforms[link_name]);
   }
+
   return link_tfs;
 }
 
 const Eigen::Isometry3d& Environment::getLinkTransform(const std::string& link_name) const
 {
-  return current_state_->transforms[link_name];
+  std::lock_guard<std::mutex> lock(mutex_);
+  const Eigen::Isometry3d& tf = current_state_->transforms[link_name];
+
+  return tf;
+}
+
+StateSolver::Ptr Environment::getStateSolver() const
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  StateSolver::Ptr state_solver = state_solver_->clone();
+
+  return state_solver;
 }
 
 void Environment::getCollisionObject(tesseract_collision::CollisionShapesConst& shapes,
@@ -320,29 +375,14 @@ void Environment::getCollisionObject(tesseract_collision::CollisionShapesConst& 
 {
   for (const auto& c : link.collision)
   {
-    // Need to force convex hull TODO: Remove after URDF dom has been updated.
-    if (c->geometry->getType() == tesseract_geometry::MESH)
-    {
-      // This is required because convex hull cannot have multiple faces on the same plane.
-      std::shared_ptr<tesseract_common::VectorVector3d> ch_verticies(new tesseract_common::VectorVector3d());
-      std::shared_ptr<Eigen::VectorXi> ch_faces(new Eigen::VectorXi());
-      int ch_num_faces = tesseract_collision::createConvexHull(
-          *ch_verticies,
-          *ch_faces,
-          *(std::static_pointer_cast<const tesseract_geometry::Mesh>(c->geometry)->getVertices()));
-      shapes.push_back(tesseract_geometry::ConvexMesh::Ptr(
-          new tesseract_geometry::ConvexMesh(ch_verticies, ch_faces, ch_num_faces)));
-    }
-    else
-    {
-      shapes.push_back(c->geometry);
-    }
+    shapes.push_back(c->geometry);
     shape_poses.push_back(c->origin);
   }
 }
 
 bool Environment::setActiveDiscreteContactManager(const std::string& name)
 {
+  std::lock_guard<std::mutex> lock(mutex_);
   tesseract_collision::DiscreteContactManager::Ptr manager = getDiscreteContactManagerHelper(name);
   if (manager == nullptr)
   {
@@ -352,11 +392,16 @@ bool Environment::setActiveDiscreteContactManager(const std::string& name)
 
   discrete_manager_name_ = name;
   discrete_manager_ = std::move(manager);
+
+  // Update the current state information since the contact manager has been created/set
+  currentStateChanged();
+
   return true;
 }
 
 tesseract_collision::DiscreteContactManager::Ptr Environment::getDiscreteContactManager(const std::string& name) const
 {
+  std::lock_guard<std::mutex> lock(mutex_);
   tesseract_collision::DiscreteContactManager::Ptr manager = getDiscreteContactManagerHelper(name);
   if (manager == nullptr)
   {
@@ -369,6 +414,7 @@ tesseract_collision::DiscreteContactManager::Ptr Environment::getDiscreteContact
 
 bool Environment::setActiveContinuousContactManager(const std::string& name)
 {
+  std::lock_guard<std::mutex> lock(mutex_);
   tesseract_collision::ContinuousContactManager::Ptr manager = getContinuousContactManagerHelper(name);
 
   if (manager == nullptr)
@@ -379,12 +425,17 @@ bool Environment::setActiveContinuousContactManager(const std::string& name)
 
   continuous_manager_name_ = name;
   continuous_manager_ = std::move(manager);
+
+  // Update the current state information since the contact manager has been created/set
+  currentStateChanged();
+
   return true;
 }
 
 tesseract_collision::ContinuousContactManager::Ptr
 Environment::getContinuousContactManager(const std::string& name) const
 {
+  std::lock_guard<std::mutex> lock(mutex_);
   tesseract_collision::ContinuousContactManager::Ptr manager = getContinuousContactManagerHelper(name);
   if (manager == nullptr)
   {
@@ -407,7 +458,7 @@ Environment::getDiscreteContactManagerHelper(const std::string& name) const
   {
     for (const auto& link : scene_graph_->getLinks())
     {
-      if (link->collision.size() > 0)
+      if (!link->collision.empty())
       {
         tesseract_collision::CollisionShapesConst shapes;
         tesseract_common::VectorIsometry3d shape_poses;
@@ -435,7 +486,7 @@ Environment::getContinuousContactManagerHelper(const std::string& name) const
   {
     for (const auto& link : scene_graph_->getLinks())
     {
-      if (link->collision.size() > 0)
+      if (!link->collision.empty())
       {
         tesseract_collision::CollisionShapesConst shapes;
         tesseract_common::VectorIsometry3d shape_poses;

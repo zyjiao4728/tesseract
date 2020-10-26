@@ -7,24 +7,30 @@ find_package(orocos_kdl REQUIRED)
 find_package(console_bridge REQUIRED)
 find_package(tesseract_scene_graph REQUIRED)
 find_package(tesseract_common REQUIRED)
-
-list(FIND CMAKE_CXX_COMPILE_FEATURES cxx_std_11 CXX_FEATURE_FOUND)
+find_package(opw_kinematics REQUIRED)
 
 # Create interface for core
 add_library(${PROJECT_NAME}_core INTERFACE)
 target_link_libraries(${PROJECT_NAME}_core INTERFACE tesseract::tesseract_scene_graph)
-target_compile_options(${PROJECT_NAME}_core INTERFACE -Wall -Wextra -Wsuggest-override -Wconversion -Wsign-conversion)
-if(CXX_FEATURE_FOUND EQUAL "-1")
-    target_compile_options(${PROJECT_NAME}_core INTERFACE -std=c++11)
-else()
-    target_compile_features(${PROJECT_NAME}_core INTERFACE cxx_std_11)
-endif()
+tesseract_target_compile_options(${PROJECT_NAME}_core INTERFACE)
+tesseract_clang_tidy(${PROJECT_NAME}_core)
 target_include_directories(${PROJECT_NAME}_core INTERFACE
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
     "$<INSTALL_INTERFACE:include>")
 target_include_directories(${PROJECT_NAME}_core SYSTEM INTERFACE
     ${EIGEN3_INCLUDE_DIRS}
     $<TARGET_PROPERTY:tesseract::tesseract_common,INTERFACE_INCLUDE_DIRECTORIES>) #tesseract::tesseract_common Due to bug in catkin, there is an open PR
+
+# Create ikfast kinematics interface
+add_library(${PROJECT_NAME}_ikfast INTERFACE)
+target_link_libraries(${PROJECT_NAME}_ikfast INTERFACE ${PROJECT_NAME}_core)
+tesseract_target_compile_options(${PROJECT_NAME}_ikfast INTERFACE)
+tesseract_clang_tidy(${PROJECT_NAME}_ikfast)
+target_include_directories(${PROJECT_NAME}_ikfast INTERFACE
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+    "$<INSTALL_INTERFACE:include>")
+target_include_directories(${PROJECT_NAME}_ikfast SYSTEM INTERFACE
+    ${EIGEN3_INCLUDE_DIRS})
 
 # Add KDL implementation of tesseract_kinematics
 add_library(${PROJECT_NAME}_kdl SHARED
@@ -34,12 +40,8 @@ add_library(${PROJECT_NAME}_kdl SHARED
   src/kdl/kdl_inv_kin_chain_nr.cpp
 )
 target_link_libraries(${PROJECT_NAME}_kdl PUBLIC ${PROJECT_NAME}_core tesseract::tesseract_scene_graph orocos-kdl console_bridge)
-target_compile_options(${PROJECT_NAME}_kdl PRIVATE -Wsuggest-override -Wconversion -Wsign-conversion)
-if(CXX_FEATURE_FOUND EQUAL "-1")
-    target_compile_options(${PROJECT_NAME}_kdl PUBLIC -std=c++11)
-else()
-    target_compile_features(${PROJECT_NAME}_kdl PUBLIC cxx_std_11)
-endif()
+tesseract_target_compile_options(${PROJECT_NAME}_kdl PUBLIC)
+tesseract_clang_tidy(${PROJECT_NAME}_kdl)
 if(KDL_VERSION VERSION_LESS "1.4.0")
     target_compile_definitions(${PROJECT_NAME}_kdl PUBLIC KDL_LESS_1_4_0=ON)
 endif()
@@ -50,44 +52,28 @@ target_include_directories(${PROJECT_NAME}_kdl SYSTEM PUBLIC
     ${EIGEN3_INCLUDE_DIRS}
     ${orocos_kdl_INCLUDE_DIRS}) # Orocos did not export target correctly
 
-list (APPEND PACKAGE_LIBRARIES ${PROJECT_NAME}_core)
-list (APPEND PACKAGE_LIBRARIES ${PROJECT_NAME}_kdl)
+# Add OPW implementation of tesseract_kinematics
+add_library(${PROJECT_NAME}_opw SHARED src/opw/opw_inv_kin.cpp)
+target_link_libraries(${PROJECT_NAME}_opw PUBLIC ${PROJECT_NAME}_core tesseract::tesseract_scene_graph opw_kinematics::opw_kinematics console_bridge)
+tesseract_target_compile_options(${PROJECT_NAME}_opw PUBLIC)
+tesseract_clang_tidy(${PROJECT_NAME}_opw)
+target_include_directories(${PROJECT_NAME}_opw PUBLIC
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+    "$<INSTALL_INTERFACE:include>")
+target_include_directories(${PROJECT_NAME}_opw SYSTEM PUBLIC
+    ${EIGEN3_INCLUDE_DIRS})
 
-# Mark executables and/or libraries for installation
-install(TARGETS ${PACKAGE_LIBRARIES} EXPORT ${PROJECT_NAME}-targets DESTINATION lib)
-install(EXPORT ${PROJECT_NAME}-targets NAMESPACE tesseract:: DESTINATION lib/cmake/${PROJECT_NAME})
+tesseract_configure_package(${PROJECT_NAME}_core ${PROJECT_NAME}_kdl ${PROJECT_NAME}_ikfast ${PROJECT_NAME}_opw)
 
 # Mark cpp header files for installation
 install(DIRECTORY include/${PROJECT_NAME}
   DESTINATION include
-  FILES_MATCHING PATTERN "*.h"
+  FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
   PATTERN ".svn" EXCLUDE
 )
 
-install(FILES package.xml DESTINATION share/${PROJECT_NAME})
-
-# Create cmake config files
-include(CMakePackageConfigHelpers)
-configure_package_config_file(${CMAKE_CURRENT_LIST_DIR}/cmake/${PROJECT_NAME}-config.cmake.in
-  ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config.cmake
-  INSTALL_DESTINATION lib/cmake/${PROJECT_NAME}
-  NO_CHECK_REQUIRED_COMPONENTS_MACRO)
-
-write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config-version.cmake
-  VERSION ${PROJECT_VERSION} COMPATIBILITY ExactVersion)
-
-install(FILES
-  "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config.cmake"
-  "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config-version.cmake"
-  DESTINATION lib/cmake/${PROJECT_NAME})
-
-export(EXPORT ${PROJECT_NAME}-targets FILE ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-targets.cmake)
-
-if (ENABLE_TESTS)
+if (TESSERACT_ENABLE_TESTING)
   enable_testing()
-  add_custom_target(run_tests ALL
-      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-      COMMAND ${CMAKE_CTEST_COMMAND} -C $<CONFIGURATION> -V)
-
+  tesseract_add_run_tests_target()
   add_subdirectory(test)
 endif()

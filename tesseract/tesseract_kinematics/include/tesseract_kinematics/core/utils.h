@@ -42,7 +42,7 @@ namespace tesseract_kinematics
 /**
  * @brief Change the base coordinate system of the jacobian
  * @param jacobian The current Jacobian which gets modified in place
- * @param change_base The transform from the base frame of the jacobian to the desired frame.
+ * @param change_base The transform from the desired frame to the current base frame of the jacobian
  */
 inline static void jacobianChangeBase(Eigen::Ref<Eigen::MatrixXd> jacobian, const Eigen::Isometry3d& change_base)
 {
@@ -277,13 +277,93 @@ ForwardKinematicsConstPtrMap createKinematicsMap(const tesseract_scene_graph::Sc
   return manipulators;
 }
 
-inline static bool isWithinLimits(const Eigen::VectorXd& joint_values, const Eigen::MatrixX2d& limits)
+/**
+ * @brief This will check if the provided joint values are within the privided limits
+ * @param joint_values The joint values to check
+ * @param limits The joint limits
+ * @return True if joint values are within the joint limits, otherwise false
+ */
+template <typename FloatType>
+inline static bool isWithinLimits(const Eigen::Ref<const Eigen::Matrix<FloatType, Eigen::Dynamic, 1> >& joint_values,
+                                  const Eigen::MatrixX2d& limits)
 {
   for (int i = 0; i < limits.rows(); ++i)
     if ((joint_values[i] < limits(i, 0)) || (joint_values[i] > limits(i, 1)))
       return false;
 
   return true;
+}
+
+/**
+ * @brief Kinematics only return solution between PI and -PI. Provided the limits it will append redundant solutions.
+ * @param sol The current solution returned from OPW kinematics
+ * @param limits The joint limits of the robot
+ */
+template <typename FloatType>
+inline std::vector<FloatType> getRedundantSolutions(const FloatType* sol, const Eigen::MatrixX2d& limits)
+{
+  auto dof = static_cast<int>(limits.rows());
+  FloatType val;
+  std::vector<FloatType> redundant_sols;
+  for (int i = 0; i < dof; ++i)
+  {
+    val = sol[i];
+    while ((val -= (2 * M_PI)) > limits(i, 0))
+    {
+      std::vector<FloatType> new_sol(sol, sol + dof);
+      new_sol[static_cast<size_t>(i)] = val;
+      redundant_sols.insert(redundant_sols.end(), new_sol.begin(), new_sol.end());
+    }
+
+    val = sol[i];
+    while ((val += (static_cast<FloatType>(2.0 * M_PI))) < limits(i, 1))
+    {
+      std::vector<FloatType> new_sol(sol, sol + dof);
+      new_sol[static_cast<size_t>(i)] = val;
+      redundant_sols.insert(redundant_sols.end(), new_sol.begin(), new_sol.end());
+    }
+  }
+
+  return redundant_sols;
+}
+
+/**
+ * @brief Given a vector of floats, this check if they are finite
+ *
+ *  In the case of OPW and IKFast they can return NANS so this is used to check that solutions are valid.
+ *
+ * @param qs A pointer to a floats array
+ * @param dof The length of the float array
+ * @return True if the array is valid, otherwise false
+ */
+template <typename FloatType>
+inline bool isValid(const FloatType* qs, int dof)
+{
+  for (int i = 0; i < dof; ++i)
+    if (!std::isfinite(qs[i]))
+      return false;
+
+  return true;
+}
+
+/**
+ * @brief This take an array of floats and modifies them in place to be between [-PI, PI]
+ * @param qs A pointer to a float array
+ * @param dof The length of the float array
+ */
+template <typename FloatType>
+inline void harmonizeTowardZero(FloatType* qs, int dof)
+{
+  const static auto pi = FloatType(M_PI);
+  const static auto two_pi = FloatType(2.0 * M_PI);
+
+  for (int i = 0; i < dof; i++)
+  {
+    if (qs[i] > pi)
+      qs[i] -= two_pi;
+    else if (qs[i] < -pi)
+      qs[i] += two_pi;
+  }
 }
 
 }  // namespace tesseract_kinematics

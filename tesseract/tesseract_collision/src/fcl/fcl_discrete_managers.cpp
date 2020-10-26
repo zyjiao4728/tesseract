@@ -45,6 +45,9 @@ namespace tesseract_collision
 {
 namespace tesseract_collision_fcl
 {
+static const CollisionShapesConst EMPTY_COLLISION_SHAPES_CONST;
+static const tesseract_common::VectorIsometry3d EMPTY_COLLISION_SHAPES_TRANSFORMS;
+
 FCLDiscreteBVHManager::FCLDiscreteBVHManager()
 {
   manager_ = std::unique_ptr<fcl::BroadPhaseCollisionManagerd>(new fcl::DynamicAABBTreeCollisionManagerd());
@@ -68,7 +71,7 @@ DiscreteContactManager::Ptr FCLDiscreteBVHManager::clone() const
   manager->setContactDistanceThreshold(contact_distance_);
   manager->setIsContactAllowedFn(fn_);
 
-  return manager;
+  return std::move(manager);
 }
 
 bool FCLDiscreteBVHManager::addCollisionObject(const std::string& name,
@@ -83,10 +86,23 @@ bool FCLDiscreteBVHManager::addCollisionObject(const std::string& name,
     addCollisionObject(new_cow);
     return true;
   }
-  else
-  {
-    return false;
-  }
+
+  return false;
+}
+
+const CollisionShapesConst& FCLDiscreteBVHManager::getCollisionObjectGeometries(const std::string& name) const
+{
+  auto cow = link2cow_.find(name);
+  return (link2cow_.find(name) != link2cow_.end()) ? cow->second->getCollisionGeometries() :
+                                                     EMPTY_COLLISION_SHAPES_CONST;
+}
+
+const tesseract_common::VectorIsometry3d&
+FCLDiscreteBVHManager::getCollisionObjectGeometriesTransforms(const std::string& name) const
+{
+  auto cow = link2cow_.find(name);
+  return (link2cow_.find(name) != link2cow_.end()) ? cow->second->getCollisionGeometriesTransforms() :
+                                                     EMPTY_COLLISION_SHAPES_TRANSFORMS;
 }
 
 bool FCLDiscreteBVHManager::hasCollisionObject(const std::string& name) const

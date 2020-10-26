@@ -30,6 +30,7 @@ TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_ros_examples/pick_and_place_example.h>
+#include <tesseract_motion_planners/trajopt/config/trajopt_planner_config.h>
 #include <tesseract_motion_planners/trajopt/trajopt_motion_planner.h>
 #include <tesseract_rosutils/plotting.h>
 #include <tesseract_rosutils/utils.h>
@@ -54,13 +55,16 @@ const std::string ROBOT_SEMANTIC_PARAM = "robot_description_semantic"; /**< Defa
                                                                           description */
 const std::string GET_ENVIRONMENT_CHANGES_SERVICE = "get_tesseract_changes_rviz";
 const std::string MODIFY_ENVIRONMENT_SERVICE = "modify_tesseract_rviz";
+const bool ENABLE_TIME_COST = false;
+const bool ENABLE_VELOCITY_COST = false;
+const double OFFSET = 0.005;
 
 namespace tesseract_ros_examples
 {
 bool PickAndPlaceExample::run()
 {
   // Set Log Level
-  util::gLogLevel = util::LevelInfo;
+  util::gLogLevel = util::LevelError;
 
   /////////////
   /// SETUP ///
@@ -77,7 +81,7 @@ bool PickAndPlaceExample::run()
   nh_.getParam("box_parent_link", box_parent_link);
 
   // Initialize the environment
-  ResourceLocatorFn locator = tesseract_rosutils::locateResource;
+  ResourceLocator::Ptr locator = std::make_shared<tesseract_rosutils::ROSResourceLocator>();
   if (!tesseract_->init(urdf_xml_string, srdf_xml_string, locator))
     return false;
 
@@ -126,7 +130,7 @@ bool PickAndPlaceExample::run()
   joint_box.child_link_name = link_box.getName();
   joint_box.type = JointType::FIXED;
   joint_box.parent_to_joint_origin_transform = Eigen::Isometry3d::Identity();
-  joint_box.parent_to_joint_origin_transform.translation() += Eigen::Vector3d(box_x, box_y, box_side / 2.0);
+  joint_box.parent_to_joint_origin_transform.translation() += Eigen::Vector3d(box_x, box_y, (box_side / 2.0) + OFFSET);
 
   tesseract_->getEnvironment()->addLink(link_box, joint_box);
 
@@ -155,7 +159,7 @@ bool PickAndPlaceExample::run()
   Eigen::Isometry3d final_pose;
   Eigen::Quaterniond orientation(0.0, 0.0, 1.0, 0.0);
   final_pose.linear() = orientation.matrix();
-  final_pose.translation() += Eigen::Vector3d(box_x, box_y, box_side + 0.77153);  // Offset for the table
+  final_pose.translation() += Eigen::Vector3d(box_x, box_y, box_side + 0.77153 + OFFSET);  // Offset for the table
 
   // Define the approach pose
   Eigen::Isometry3d approach_pose = final_pose;
@@ -178,21 +182,18 @@ bool PickAndPlaceExample::run()
   pci.init_info.dt = 0.5;
 
   // Add a collision cost
-  if (true)
   {
-    std::shared_ptr<trajopt::CollisionTermInfo> collision(new trajopt::CollisionTermInfo);
+    auto collision = std::make_shared<trajopt::CollisionTermInfo>();
     collision->name = "collision";
     collision->term_type = trajopt::TT_COST;
     collision->continuous = true;
     collision->first_step = 1;
     collision->last_step = pci.basic_info.n_steps - 1;
-    collision->gap = 1;
-    collision->info = trajopt::createSafetyMarginDataVector(pci.basic_info.n_steps, 0.025, 40);
+    collision->info = trajopt::createSafetyMarginDataVector(pci.basic_info.n_steps, 0.005, 50);
     pci.cost_infos.push_back(collision);
   }
 
   // Add a velocity cost without time to penalize paths that are longer
-  if (true)
   {
     std::shared_ptr<trajopt::JointVelTermInfo> jv(new trajopt::JointVelTermInfo);
     jv->targets = std::vector<double>(7, 0.0);
@@ -205,7 +206,7 @@ bool PickAndPlaceExample::run()
   }
 
   // Add a velocity cnt with time to insure that robot dynamics are obeyed
-  if (false)
+  if (ENABLE_VELOCITY_COST)
   {
     std::shared_ptr<trajopt::JointVelTermInfo> jv(new trajopt::JointVelTermInfo);
 
@@ -227,11 +228,9 @@ bool PickAndPlaceExample::run()
   }
 
   // Add cartesian pose cnt at the approach point
-  if (true)
   {
     Eigen::Quaterniond rotation(approach_pose.linear());
-    std::shared_ptr<trajopt::CartPoseTermInfo> pose_constraint =
-        std::shared_ptr<trajopt::CartPoseTermInfo>(new trajopt::CartPoseTermInfo);
+    auto pose_constraint = std::make_shared<trajopt::CartPoseTermInfo>();
     pose_constraint->term_type = trajopt::TT_CNT;
     pose_constraint->link = end_effector;
     pose_constraint->timestep = steps_;
@@ -245,11 +244,9 @@ bool PickAndPlaceExample::run()
   }
 
   // Add cartesian pose cnt at the final point
-  if (true)
   {
     Eigen::Quaterniond rotation(final_pose.linear());
-    std::shared_ptr<trajopt::CartPoseTermInfo> pose_constraint =
-        std::shared_ptr<trajopt::CartPoseTermInfo>(new trajopt::CartPoseTermInfo);
+    auto pose_constraint = std::make_shared<trajopt::CartPoseTermInfo>();
     pose_constraint->term_type = trajopt::TT_CNT;
     pose_constraint->link = end_effector;
     pose_constraint->timestep = 2 * steps_ - 1;
@@ -263,7 +260,7 @@ bool PickAndPlaceExample::run()
   }
 
   // Add a cost on the total time to complete the pick
-  if (false)
+  if (ENABLE_TIME_COST)
   {
     std::shared_ptr<trajopt::TotalTimeTermInfo> time_cost(new trajopt::TotalTimeTermInfo);
     time_cost->name = "time_cost";
@@ -301,7 +298,7 @@ bool PickAndPlaceExample::run()
   tesseract_motion_planners::PlannerResponse planning_response_place;
 
   // Set Planner Configuration
-  planner.setConfiguration(config);
+  planner.setConfiguration(std::make_shared<tesseract_motion_planners::TrajOptPlannerConfig>(config));
 
   // Solve problem. Results are stored in the response
   planner.solve(planning_response);
@@ -311,11 +308,11 @@ bool PickAndPlaceExample::run()
 
   // Plot the resulting trajectory
   if (plotting_)
-    plotter->plotTrajectory(
-        pick_prob->GetKin()->getJointNames(),
-        planning_response.trajectory.leftCols(static_cast<long>(pick_prob->GetKin()->getJointNames().size())));
+    plotter->plotTrajectory(pick_prob->GetKin()->getJointNames(),
+                            planning_response.joint_trajectory.trajectory.leftCols(
+                                static_cast<long>(pick_prob->GetKin()->getJointNames().size())));
 
-  std::cout << planning_response.trajectory << '\n';
+  std::cout << planning_response.joint_trajectory.trajectory << '\n';
 
   /////////////
   /// PLACE ///
@@ -337,6 +334,8 @@ bool PickAndPlaceExample::run()
 
   tesseract_->getEnvironment()->moveLink(joint_box2);
   tesseract_->getEnvironment()->addAllowedCollision(link_box.getName(), "iiwa_link_ee", "Never");
+  tesseract_->getEnvironment()->addAllowedCollision(link_box.getName(), "iiwa_link_7", "Never");
+  tesseract_->getEnvironment()->addAllowedCollision(link_box.getName(), "iiwa_link_6", "Never");
   tesseract_->getEnvironment()->addAllowedCollision(link_box.getName(), end_effector, "Adjacent");
 
   if (rviz_)
@@ -347,8 +346,8 @@ bool PickAndPlaceExample::run()
   }
 
   // Set the current state to the last state of the pick trajectory
-  tesseract_->getEnvironment()->setState(pick_prob->GetKin()->getJointNames(),
-                                         planning_response.trajectory.bottomRows(1).transpose());
+  tesseract_->getEnvironment()->setState(planning_response.joint_trajectory.joint_names,
+                                         planning_response.joint_trajectory.trajectory.bottomRows(1).transpose());
 
   // Retreat to the approach pose
   Eigen::Isometry3d retreat_pose = approach_pose;
@@ -393,23 +392,20 @@ bool PickAndPlaceExample::run()
   pci_place.init_info.dt = 0.5;
 
   // Add a collision cost
-  if (true)
   {
-    std::shared_ptr<trajopt::CollisionTermInfo> collision(new trajopt::CollisionTermInfo);
+    auto collision = std::make_shared<trajopt::CollisionTermInfo>();
     collision->name = "collision";
     collision->term_type = trajopt::TT_COST;
     collision->continuous = true;
     collision->first_step = 1;
     collision->last_step = pci_place.basic_info.n_steps - 1;
-    collision->gap = 1;
-    collision->info = trajopt::createSafetyMarginDataVector(pci_place.basic_info.n_steps, 0.025, 40);
+    collision->info = trajopt::createSafetyMarginDataVector(pci_place.basic_info.n_steps, 0.005, 50);
     pci_place.cost_infos.push_back(collision);
   }
 
   // Add a velocity cost without time to penalize paths that are longer
-  if (true)
   {
-    std::shared_ptr<trajopt::JointVelTermInfo> jv(new trajopt::JointVelTermInfo);
+    auto jv = std::make_shared<trajopt::JointVelTermInfo>();
     jv->targets = std::vector<double>(7, 0.0);
     jv->coeffs = std::vector<double>(7, 5.0);
     jv->term_type = trajopt::TT_COST;
@@ -418,8 +414,9 @@ bool PickAndPlaceExample::run()
     jv->name = "joint_velocity_cost";
     pci_place.cost_infos.push_back(jv);
   }
+
   // Add a velocity cnt with time to insure that robot dynamics are obeyed
-  if (false)
+  if (ENABLE_VELOCITY_COST)
   {
     std::shared_ptr<trajopt::JointVelTermInfo> jv(new trajopt::JointVelTermInfo);
 
@@ -441,30 +438,25 @@ bool PickAndPlaceExample::run()
   }
 
   // Add cartesian pose cnt at the retreat point
-  if (true)
-  {
-    Eigen::Quaterniond rotation(retreat_pose.linear());
-    std::shared_ptr<trajopt::CartPoseTermInfo> pose_constraint =
-        std::shared_ptr<trajopt::CartPoseTermInfo>(new trajopt::CartPoseTermInfo);
-    pose_constraint->term_type = trajopt::TT_CNT;
-    pose_constraint->link = end_effector;
-    pose_constraint->timestep = steps_ - 1;
-    pose_constraint->xyz = retreat_pose.translation();
+  Eigen::Quaterniond rotation(retreat_pose.linear());
+  auto pose_constraint = std::make_shared<trajopt::CartPoseTermInfo>();
+  pose_constraint->term_type = trajopt::TT_CNT;
+  pose_constraint->link = end_effector;
+  pose_constraint->timestep = steps_ - 1;
+  pose_constraint->xyz = retreat_pose.translation();
 
-    pose_constraint->wxyz = Eigen::Vector4d(rotation.w(), rotation.x(), rotation.y(), rotation.z());
-    pose_constraint->pos_coeffs = Eigen::Vector3d(10.0, 10.0, 10.0);
-    pose_constraint->rot_coeffs = Eigen::Vector3d(10.0, 10.0, 10.0);
-    pose_constraint->name = "pose_" + std::to_string(steps_ - 1);
-    pci_place.cnt_infos.push_back(pose_constraint);
-  }
+  pose_constraint->wxyz = Eigen::Vector4d(rotation.w(), rotation.x(), rotation.y(), rotation.z());
+  pose_constraint->pos_coeffs = Eigen::Vector3d(10.0, 10.0, 10.0);
+  pose_constraint->rot_coeffs = Eigen::Vector3d(10.0, 10.0, 10.0);
+  pose_constraint->name = "pose_" + std::to_string(steps_ - 1);
+  pci_place.cnt_infos.push_back(pose_constraint);
 
   // Add cartesian pose cnt at the final point
   int steps = 3 * steps_ - 2 * steps_;
   for (int index = 0; index < steps; index++)
   {
     Eigen::Quaterniond rotation(final_pose.linear());
-    std::shared_ptr<trajopt::CartPoseTermInfo> pose_constraint =
-        std::shared_ptr<trajopt::CartPoseTermInfo>(new trajopt::CartPoseTermInfo);
+    auto pose_constraint = std::make_shared<trajopt::CartPoseTermInfo>();
     pose_constraint->term_type = trajopt::TT_CNT;
     pose_constraint->link = end_effector;
     pose_constraint->timestep = 2 * steps_ + index;
@@ -479,7 +471,7 @@ bool PickAndPlaceExample::run()
   }
 
   // Add a cost on the total time to complete the pick
-  if (false)
+  if (ENABLE_TIME_COST)
   {
     std::shared_ptr<trajopt::TotalTimeTermInfo> time_cost(new trajopt::TotalTimeTermInfo);
     time_cost->name = "time_cost";
@@ -511,7 +503,7 @@ bool PickAndPlaceExample::run()
   }
 
   // Set Planner Configuration
-  planner.setConfiguration(config_place);
+  planner.setConfiguration(std::make_shared<tesseract_motion_planners::TrajOptPlannerConfig>(config_place));
 
   // Solve problem
   planner.solve(planning_response_place);
@@ -521,11 +513,11 @@ bool PickAndPlaceExample::run()
 
   // Plot the resulting trajectory
   if (plotting_)
-    plotter->plotTrajectory(
-        place_prob->GetKin()->getJointNames(),
-        planning_response_place.trajectory.leftCols(static_cast<long>(place_prob->GetKin()->getJointNames().size())));
+    plotter->plotTrajectory(planning_response_place.joint_trajectory.joint_names,
+                            planning_response_place.joint_trajectory.trajectory.leftCols(
+                                static_cast<long>(place_prob->GetKin()->getJointNames().size())));
 
-  std::cout << planning_response_place.trajectory << '\n';
+  std::cout << planning_response_place.joint_trajectory.trajectory << '\n';
 
   ROS_INFO("Done");
   return true;

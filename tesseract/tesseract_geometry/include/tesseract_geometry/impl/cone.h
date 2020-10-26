@@ -43,11 +43,15 @@ public:
 
   Cone(double r, double l) : Geometry(GeometryType::CONE), r_(r), l_(l) {}
   ~Cone() override = default;
+  Cone(const Cone&) = delete;
+  Cone& operator=(const Cone&) = delete;
+  Cone(Cone&&) = delete;
+  Cone& operator=(Cone&&) = delete;
 
   double getRadius() const { return r_; }
   double getLength() const { return l_; }
 
-  Geometry::Ptr clone() const override { return Cone::Ptr(new Cone(r_, l_)); }
+  Geometry::Ptr clone() const override { return std::make_shared<Cone>(r_, l_); }
 
 private:
   double r_;

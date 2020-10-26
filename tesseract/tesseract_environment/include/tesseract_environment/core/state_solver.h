@@ -48,7 +48,12 @@ public:
   using Ptr = std::shared_ptr<StateSolver>;
   using ConstPtr = std::shared_ptr<const StateSolver>;
 
+  StateSolver() = default;
   virtual ~StateSolver() = default;
+  StateSolver(const StateSolver&) = delete;
+  StateSolver& operator=(const StateSolver&) = delete;
+  StateSolver(StateSolver&&) = delete;
+  StateSolver& operator=(StateSolver&&) = delete;
 
   virtual bool init(tesseract_scene_graph::SceneGraph::ConstPtr scene_graph) = 0;
 
@@ -84,7 +89,21 @@ public:
    */
   virtual EnvState::ConstPtr getCurrentState() const = 0;
 
+  /**
+   * @brief This should clone the object so it may be used in a multi threaded application where each thread would
+   * clone the solver.
+   * @return A clone of the object.
+   */
+  virtual Ptr clone() const = 0;
+
+protected:
+  /**
+   * @brief This is to only be used by the environment
+   * @param commands
+   */
   virtual void onEnvironmentChanged(const Commands& commands) = 0;
+
+  friend class Environment;
 };
 }  // namespace tesseract_environment
 

@@ -2,9 +2,10 @@
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <gtest/gtest.h>
 #include <algorithm>
-#include <tesseract_scene_graph/parser/urdf_parser.h>
+#include <tesseract_urdf/urdf_parser.h>
 #include <tesseract_collision/bullet/bullet_discrete_bvh_manager.h>
 #include <tesseract_collision/bullet/bullet_cast_bvh_manager.h>
+#include <tesseract_scene_graph/resource_locator.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_environment/core/types.h>
@@ -20,7 +21,7 @@ std::string locateResource(const std::string& url)
   if (url.find("package://tesseract_support") == 0)
   {
     mod_url.erase(0, strlen("package://tesseract_support"));
-    size_t pos = mod_url.find("/");
+    size_t pos = mod_url.find('/');
     if (pos == std::string::npos)
     {
       return std::string();
@@ -45,8 +46,9 @@ SceneGraph::Ptr getSceneGraph()
 {
   std::string path = std::string(TESSERACT_SUPPORT_DIR) + "/urdf/lbr_iiwa_14_r820.urdf";
 
-  tesseract_scene_graph::ResourceLocatorFn locator = locateResource;
-  return tesseract_scene_graph::parseURDFFile(path, locator);
+  tesseract_scene_graph::ResourceLocator::Ptr locator =
+      std::make_shared<tesseract_scene_graph::SimpleResourceLocator>(locateResource);
+  return tesseract_urdf::parseURDFFile(path, locator);
 }
 
 void runContactManagerCloneTest(const tesseract_environment::Environment::Ptr& env)
@@ -97,6 +99,12 @@ void runAddandRemoveLinkTest(const tesseract_environment::Environment::Ptr& env)
   EXPECT_TRUE(std::find(joint_names.begin(), joint_names.end(), joint_1.getName()) == joint_names.end());
 
   env->getSceneGraph()->saveDOT("/tmp/after_remove_link_unit.dot");
+
+  // Test against double removing
+  EXPECT_FALSE(env->removeLink(link_1.getName()));
+  EXPECT_FALSE(env->removeLink(link_2.getName()));
+  EXPECT_FALSE(env->removeJoint(joint_1.getName()));
+  EXPECT_FALSE(env->removeJoint("joint_" + link_1.getName()));
 }
 
 void runMoveLinkandJointTest(const tesseract_environment::Environment::Ptr& env)
@@ -201,7 +209,7 @@ void runCurrentStatePreservedWhenEnvChangesTest(const tesseract_environment::Env
   }
 }
 
-TEST(TesseractEnvironmentUnit, KDLEnvCloneContactManagerUnit)
+TEST(TesseractEnvironmentUnit, KDLEnvCloneContactManagerUnit)  // NOLINT
 {
   tesseract_scene_graph::SceneGraph::Ptr scene_graph = getSceneGraph();
   EXPECT_TRUE(scene_graph != nullptr);
@@ -225,7 +233,7 @@ TEST(TesseractEnvironmentUnit, KDLEnvCloneContactManagerUnit)
   runContactManagerCloneTest(env);
 }
 
-TEST(TesseractEnvironmentUnit, KDLEnvAddandRemoveLink)
+TEST(TesseractEnvironmentUnit, KDLEnvAddandRemoveLink)  // NOLINT
 {
   SceneGraph::Ptr scene_graph = getSceneGraph();
   EXPECT_TRUE(scene_graph != nullptr);
@@ -249,7 +257,7 @@ TEST(TesseractEnvironmentUnit, KDLEnvAddandRemoveLink)
   runAddandRemoveLinkTest(env);
 }
 
-TEST(TesseractEnvironmentUnit, KDLEnvMoveLinkandJoint)
+TEST(TesseractEnvironmentUnit, KDLEnvMoveLinkandJoint)  // NOLINT
 {
   SceneGraph::Ptr scene_graph = getSceneGraph();
   EXPECT_TRUE(scene_graph != nullptr);
@@ -273,7 +281,7 @@ TEST(TesseractEnvironmentUnit, KDLEnvMoveLinkandJoint)
   runMoveLinkandJointTest(env);
 }
 
-TEST(TesseractEnvironmentUnit, KDLEnvChangeJointOrigin)
+TEST(TesseractEnvironmentUnit, KDLEnvChangeJointOrigin)  // NOLINT
 {
   SceneGraph::Ptr scene_graph = getSceneGraph();
   EXPECT_TRUE(scene_graph != nullptr);
@@ -297,7 +305,7 @@ TEST(TesseractEnvironmentUnit, KDLEnvChangeJointOrigin)
   runChangeJointOriginTest(env);
 }
 
-TEST(TesseractEnvironmentUnit, KDLEnvCurrentStatePreservedWhenEnvChanges)
+TEST(TesseractEnvironmentUnit, KDLEnvCurrentStatePreservedWhenEnvChanges)  // NOLINT
 {
   SceneGraph::Ptr scene_graph = getSceneGraph();
   EXPECT_TRUE(scene_graph != nullptr);

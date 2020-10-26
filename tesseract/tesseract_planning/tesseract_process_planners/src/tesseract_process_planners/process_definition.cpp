@@ -29,6 +29,7 @@ ProcessDefinition generateProcessDefinition(const ProcessDefinitionConfig& proce
   for (size_t i = 0; i < (process_config.tool_paths.size() - 1); ++i)
   {
     ProcessTransitionDefinition transition_def;
+    assert(process_config.transition_generator[i] != nullptr);  // transition generators should never be nullptrs
     if (process_config.transition_generator[i] != nullptr)
     {
       if ((process_definition.segments[i].process.front() != nullptr) &&
@@ -36,7 +37,7 @@ ProcessDefinition generateProcessDefinition(const ProcessDefinitionConfig& proce
           (process_definition.segments[i].process.back() != nullptr) &&
           (process_definition.segments[i + 1].process.back() != nullptr))
       {
-        // Connect the appropriate waypoints for the transitions
+        // Connect the appropriate waypoints for the transitions from end
         if (((process_definition.segments[i].departure.empty()) ||
              (process_definition.segments[i].departure.back() == nullptr)) &&
             ((process_definition.segments[i + 1].approach.empty()) ||
@@ -54,6 +55,25 @@ ProcessDefinition generateProcessDefinition(const ProcessDefinitionConfig& proce
         else
           transition_def.transition_from_end = process_config.transition_generator[i]->generate(
               process_definition.segments[i].departure.back(), process_definition.segments[i + 1].approach.front());
+
+        // Connect the appropriate waypoints for the transitions from start
+        if (((process_definition.segments[i].approach.empty()) ||
+             (process_definition.segments[i].approach.front() == nullptr)) &&
+            ((process_definition.segments[i + 1].departure.empty()) ||
+             (process_definition.segments[i + 1].departure.back() == nullptr)))
+          transition_def.transition_from_start = process_config.transition_generator[i]->generate(
+              process_definition.segments[i].process.front(), process_definition.segments[i + 1].process.back());
+        else if (process_definition.segments[i].approach.empty() ||
+                 process_definition.segments[i].approach.front() == nullptr)
+          transition_def.transition_from_start = process_config.transition_generator[i]->generate(
+              process_definition.segments[i].process.front(), process_definition.segments[i + 1].departure.back());
+        else if (process_definition.segments[i + 1].departure.empty() ||
+                 process_definition.segments[i + 1].departure.back() == nullptr)
+          transition_def.transition_from_start = process_config.transition_generator[i]->generate(
+              process_definition.segments[i].approach.front(), process_definition.segments[i + 1].process.back());
+        else
+          transition_def.transition_from_end = process_config.transition_generator[i]->generate(
+              process_definition.segments[i].approach.front(), process_definition.segments[i + 1].departure.back());
 
         if ((process_definition.segments[i].approach.empty() ||
              (process_definition.segments[i].approach.front() == nullptr)) &&
@@ -107,6 +127,7 @@ ProcessDefinition generateProcessDefinition(const ProcessDefinitionConfig& proce
   for (size_t i = 0; i < (process_config.tool_paths.size() - 1); ++i)
   {
     ProcessTransitionDefinition transition_def;
+    assert(process_config.transition_generator[i] != nullptr);  // transition generators should never be nullptrs
     if (process_config.transition_generator[i] != nullptr)
     {
       if ((process_definition.segments[i].process.front() != nullptr) &&
@@ -114,7 +135,7 @@ ProcessDefinition generateProcessDefinition(const ProcessDefinitionConfig& proce
           (process_definition.segments[i].process.back() != nullptr) &&
           (process_definition.segments[i + 1].process.back() != nullptr))
       {
-        // Connect the appropriate waypoints for the transitions
+        // Connect the appropriate waypoints for the transitions from end
         if (((process_definition.segments[i].departure.empty()) ||
              (process_definition.segments[i].departure.back() == nullptr)) &&
             ((process_definition.segments[i + 1].approach.empty()) ||
@@ -132,6 +153,25 @@ ProcessDefinition generateProcessDefinition(const ProcessDefinitionConfig& proce
         else
           transition_def.transition_from_end = process_config.transition_generator[i]->generate(
               process_definition.segments[i].departure.back(), process_definition.segments[i + 1].approach.front());
+
+        // Connect the appropriate waypoints for the transitions from start
+        if (((process_definition.segments[i].approach.empty()) ||
+             (process_definition.segments[i].approach.front() == nullptr)) &&
+            ((process_definition.segments[i + 1].departure.empty()) ||
+             (process_definition.segments[i + 1].departure.back() == nullptr)))
+          transition_def.transition_from_start = process_config.transition_generator[i]->generate(
+              process_definition.segments[i].process.front(), process_definition.segments[i + 1].process.back());
+        else if (process_definition.segments[i].approach.empty() ||
+                 process_definition.segments[i].approach.front() == nullptr)
+          transition_def.transition_from_start = process_config.transition_generator[i]->generate(
+              process_definition.segments[i].process.front(), process_definition.segments[i + 1].departure.back());
+        else if (process_definition.segments[i + 1].departure.empty() ||
+                 process_definition.segments[i + 1].departure.back() == nullptr)
+          transition_def.transition_from_start = process_config.transition_generator[i]->generate(
+              process_definition.segments[i].approach.front(), process_definition.segments[i + 1].process.back());
+        else
+          transition_def.transition_from_end = process_config.transition_generator[i]->generate(
+              process_definition.segments[i].approach.front(), process_definition.segments[i + 1].departure.back());
 
         if ((process_definition.segments[i].approach.empty() ||
              (process_definition.segments[i].approach.front() == nullptr)) &&

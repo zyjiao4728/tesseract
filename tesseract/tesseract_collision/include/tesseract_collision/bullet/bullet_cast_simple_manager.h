@@ -57,6 +57,11 @@ public:
   using ConstPtr = std::shared_ptr<const BulletCastSimpleManager>;
 
   BulletCastSimpleManager();
+  ~BulletCastSimpleManager() override = default;
+  BulletCastSimpleManager(const BulletCastSimpleManager&) = delete;
+  BulletCastSimpleManager& operator=(const BulletCastSimpleManager&) = delete;
+  BulletCastSimpleManager(BulletCastSimpleManager&&) = delete;
+  BulletCastSimpleManager& operator=(BulletCastSimpleManager&&) = delete;
 
   static std::string name() { return "BulletCastSimpleManager"; }
   static ContinuousContactManager::Ptr create() { return std::make_shared<BulletCastSimpleManager>(); }
@@ -68,6 +73,11 @@ public:
                           const CollisionShapesConst& shapes,
                           const tesseract_common::VectorIsometry3d& shape_poses,
                           bool enabled = true) override;
+
+  const CollisionShapesConst& getCollisionObjectGeometries(const std::string& name) const override;
+
+  const tesseract_common::VectorIsometry3d&
+  getCollisionObjectGeometriesTransforms(const std::string& name) const override;
 
   bool hasCollisionObject(const std::string& name) const override;
 

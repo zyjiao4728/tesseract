@@ -17,6 +17,15 @@ public:
   using Ptr = std::shared_ptr<KDLStateSolver>;
   using ConstPtr = std::shared_ptr<const KDLStateSolver>;
 
+  KDLStateSolver() = default;
+  ~KDLStateSolver() override = default;
+  KDLStateSolver(const KDLStateSolver&) = delete;
+  KDLStateSolver& operator=(const KDLStateSolver&) = delete;
+  KDLStateSolver(KDLStateSolver&&) = delete;
+  KDLStateSolver& operator=(KDLStateSolver&&) = delete;
+
+  StateSolver::Ptr clone() const override;
+
   bool init(tesseract_scene_graph::SceneGraph::ConstPtr scene_graph) override;
 
   /**
@@ -47,24 +56,18 @@ public:
 
   EnvState::ConstPtr getCurrentState() const override { return current_state_; }
 
-  void onEnvironmentChanged(const Commands& /*commands*/) override
-  {
-    // Cache current joint values
-    std::unordered_map<std::string, double> joints = current_state_->joints;
-
-    // Recreate state solver
-    createKDETree();
-
-    // Set to current state
-    setState(joints);
-  }
-
 private:
   tesseract_scene_graph::SceneGraph::ConstPtr scene_graph_;    /**< Tesseract Scene Graph */
   EnvState::Ptr current_state_;                                /**< Current state of the environment */
-  std::shared_ptr<KDL::Tree> kdl_tree_;                        /**< KDL tree object */
+  KDL::Tree kdl_tree_;                                         /**< KDL tree object */
   std::unordered_map<std::string, unsigned int> joint_to_qnr_; /**< Map between joint name and kdl q index */
   KDL::JntArray kdl_jnt_array_;                                /**< The kdl joint array */
+
+  /**
+   * @brief This used by the clone method
+   * @return True if init() completes successfully
+   */
+  bool init(const KDLStateSolver&);
 
   void calculateTransforms(tesseract_common::TransformMap& transforms,
                            const KDL::JntArray& q_in,
@@ -79,6 +82,18 @@ private:
   bool setJointValuesHelper(KDL::JntArray& q, const std::string& joint_name, const double& joint_value) const;
 
   bool createKDETree();
+
+  void onEnvironmentChanged(const Commands& /*commands*/) override
+  {
+    // Cache current joint values
+    std::unordered_map<std::string, double> joints = current_state_->joints;
+
+    // Recreate state solver
+    createKDETree();
+
+    // Set to current state
+    setState(joints);
+  }
 };
 
 }  // namespace tesseract_environment

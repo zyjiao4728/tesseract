@@ -78,10 +78,10 @@ public:
   using Ptr = std::shared_ptr<CollisionObjectWrapper>;
   using ConstPtr = std::shared_ptr<const CollisionObjectWrapper>;
 
-  CollisionObjectWrapper(const std::string& name,
+  CollisionObjectWrapper(std::string name,
                          const int& type_id,
-                         const CollisionShapesConst& shapes,
-                         const tesseract_common::VectorIsometry3d& shape_poses);
+                         CollisionShapesConst shapes,
+                         tesseract_common::VectorIsometry3d shape_poses);
 
   short int m_collisionFilterGroup;
   short int m_collisionFilterMask;
@@ -100,6 +100,10 @@ public:
                       other.shape_poses_.begin(),
                       [](const Eigen::Isometry3d& t1, const Eigen::Isometry3d& t2) { return t1.isApprox(t2); });
   }
+
+  const CollisionShapesConst& getCollisionGeometries() const { return shapes_; }
+
+  const tesseract_common::VectorIsometry3d& getCollisionGeometriesTransforms() const { return shape_poses_; }
 
   void setCollisionObjectsTransform(const Eigen::Isometry3d& pose)
   {
@@ -125,12 +129,19 @@ public:
     return clone_cow;
   }
 
+  /**
+   * @brief Given fcl collision shape get the index to the links collision shape
+   * @param co fcl collision shape
+   * @return links collision shape index
+   */
+  int getShapeIndex(const fcl::CollisionObjectd* co) const;
+
 protected:
-  CollisionObjectWrapper(const std::string& name,
+  CollisionObjectWrapper(std::string name,
                          const int& type_id,
-                         const CollisionShapesConst& shapes,
-                         const tesseract_common::VectorIsometry3d& shape_poses,
-                         const std::vector<CollisionGeometryPtr>& collision_geometries,
+                         CollisionShapesConst shapes,
+                         tesseract_common::VectorIsometry3d shape_poses,
+                         std::vector<CollisionGeometryPtr> collision_geometries,
                          const std::vector<CollisionObjectPtr>& collision_objects);
 
   std::string name_;             // name of the collision object

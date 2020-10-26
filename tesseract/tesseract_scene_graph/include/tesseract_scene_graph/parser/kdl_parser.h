@@ -42,8 +42,6 @@ TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <string>
 #include <vector>
 
-#include <urdf/model.h>
-#include <urdf/urdfdom_compatibility.h>
 #include <kdl/tree.hpp>
 #include <console_bridge/console.h>
 
@@ -171,7 +169,7 @@ struct kdl_tree_builder : public boost::dfs_visitor<>
       inert = convert(link->inertial);
 
     // Get incomming edges
-    int num_in_edges = static_cast<int>(boost::in_degree(vertex, graph));
+    auto num_in_edges = static_cast<int>(boost::in_degree(vertex, graph));
     if (num_in_edges == 0)  // The root of the tree will have not incoming edges
       return;
 
@@ -207,8 +205,8 @@ inline bool parseSceneGraph(const SceneGraph& scene_graph, KDL::Tree& tree)
     return false;
   }
 
-  std::string root_name = scene_graph.getRoot();
-  Link::ConstPtr root_link = scene_graph.getLink(root_name);
+  const std::string& root_name = scene_graph.getRoot();
+  const Link::ConstPtr& root_link = scene_graph.getLink(root_name);
 
   tree = KDL::Tree(root_name);
 

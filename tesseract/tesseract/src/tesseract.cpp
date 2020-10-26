@@ -33,7 +33,7 @@ TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <tesseract_kinematics/kdl/kdl_fwd_kin_tree_factory.h>
 #include <tesseract_kinematics/kdl/kdl_inv_kin_chain_lma_factory.h>
 #include <tesseract_kinematics/core/utils.h>
-#include <tesseract_scene_graph/parser/urdf_parser.h>
+#include <tesseract_urdf/urdf_parser.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract/tesseract.h>
@@ -50,7 +50,7 @@ bool Tesseract::init(tesseract_scene_graph::SceneGraph::Ptr scene_graph)
 
   // Construct Environment from Scene Graph
   environment_ = std::make_shared<tesseract_environment::KDLEnv>();
-  if (!environment_->init(scene_graph))
+  if (!environment_->init(std::move(scene_graph)))
   {
     CONSOLE_BRIDGE_logError("Failed to initialize environment.");
     return false;
@@ -70,11 +70,11 @@ bool Tesseract::init(tesseract_scene_graph::SceneGraph::Ptr scene_graph,
 {
   clear();
 
-  srdf_model_ = srdf_model;
+  srdf_model_ = std::move(srdf_model);
 
   // Construct Environment from Scene Graph
   environment_ = std::make_shared<tesseract_environment::KDLEnv>();
-  if (!environment_->init(scene_graph))
+  if (!environment_->init(std::move(scene_graph)))
   {
     CONSOLE_BRIDGE_logError("Failed to initialize environment.");
     return false;
@@ -89,12 +89,12 @@ bool Tesseract::init(tesseract_scene_graph::SceneGraph::Ptr scene_graph,
   return true;
 }
 
-bool Tesseract::init(const std::string& urdf_string, tesseract_scene_graph::ResourceLocatorFn locator)
+bool Tesseract::init(const std::string& urdf_string, const tesseract_scene_graph::ResourceLocator::Ptr& locator)
 {
   clear();
 
   // Parse urdf string into Scene Graph
-  tesseract_scene_graph::SceneGraph::Ptr scene_graph = tesseract_scene_graph::parseURDFString(urdf_string, locator);
+  tesseract_scene_graph::SceneGraph::Ptr scene_graph = tesseract_urdf::parseURDFString(urdf_string, locator);
   if (scene_graph == nullptr)
   {
     CONSOLE_BRIDGE_logError("Failed to parse URDF.");
@@ -119,12 +119,12 @@ bool Tesseract::init(const std::string& urdf_string, tesseract_scene_graph::Reso
 
 bool Tesseract::init(const std::string& urdf_string,
                      const std::string& srdf_string,
-                     tesseract_scene_graph::ResourceLocatorFn locator)
+                     const tesseract_scene_graph::ResourceLocator::Ptr& locator)
 {
   clear();
 
   // Parse urdf string into Scene Graph
-  tesseract_scene_graph::SceneGraph::Ptr scene_graph = tesseract_scene_graph::parseURDFString(urdf_string, locator);
+  tesseract_scene_graph::SceneGraph::Ptr scene_graph = tesseract_urdf::parseURDFString(urdf_string, locator);
   if (scene_graph == nullptr)
   {
     CONSOLE_BRIDGE_logError("Failed to parse URDF.");
@@ -159,13 +159,13 @@ bool Tesseract::init(const std::string& urdf_string,
   return true;
 }
 
-bool Tesseract::init(const boost::filesystem::path& urdf_path, tesseract_scene_graph::ResourceLocatorFn locator)
+bool Tesseract::init(const boost::filesystem::path& urdf_path,
+                     const tesseract_scene_graph::ResourceLocator::Ptr& locator)
 {
   clear();
 
   // Parse urdf file into Scene Graph
-  tesseract_scene_graph::SceneGraph::Ptr scene_graph =
-      tesseract_scene_graph::parseURDFFile(urdf_path.string(), locator);
+  tesseract_scene_graph::SceneGraph::Ptr scene_graph = tesseract_urdf::parseURDFFile(urdf_path.string(), locator);
   if (scene_graph == nullptr)
   {
     CONSOLE_BRIDGE_logError("Failed to parse URDF.");
@@ -190,13 +190,12 @@ bool Tesseract::init(const boost::filesystem::path& urdf_path, tesseract_scene_g
 
 bool Tesseract::init(const boost::filesystem::path& urdf_path,
                      const boost::filesystem::path& srdf_path,
-                     tesseract_scene_graph::ResourceLocatorFn locator)
+                     const tesseract_scene_graph::ResourceLocator::Ptr& locator)
 {
   clear();
 
   // Parse urdf file into Scene Graph
-  tesseract_scene_graph::SceneGraph::Ptr scene_graph =
-      tesseract_scene_graph::parseURDFFile(urdf_path.string(), locator);
+  tesseract_scene_graph::SceneGraph::Ptr scene_graph = tesseract_urdf::parseURDFFile(urdf_path.string(), locator);
   if (scene_graph == nullptr)
   {
     CONSOLE_BRIDGE_logError("Failed to parse URDF.");
@@ -313,7 +312,7 @@ bool Tesseract::registerDefaultFwdKinSolvers()
 
     if (!group.joints_.empty())
     {
-      assert(group.joints_.size() > 0);
+      assert(!group.joints_.empty());
       tesseract_kinematics::ForwardKinematics::Ptr solver =
           tree_factory->create(environment_->getSceneGraph(), group.joints_, group.name_);
       if (solver != nullptr)
@@ -418,7 +417,9 @@ void Tesseract::clear()
   environment_const_ = nullptr;
   srdf_model_ = nullptr;
   inv_kin_manager_ = nullptr;
+  inv_kin_manager_const_ = nullptr;
   fwd_kin_manager_ = nullptr;
+  fwd_kin_manager_const_ = nullptr;
 }
 
 void Tesseract::clearKinematics()
