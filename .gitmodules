@@ -1,3 +1,12 @@
 [submodule "tesseract_ext_repo"]
 	path = tesseract_ext
 	url = https://github.com/ros-industrial-consortium/tesseract_ext.git
+[submodule "cmake_common_scripts"]
+	path = cmake_common_scripts
+	url = git@github.com:ros-industrial/cmake_common_scripts.git
+[submodule "descartes_light"]
+	path = descartes_light
+	url = git@github.com:swri-robotics/descartes_light.git
+[submodule "opw_kinematics"]
+	path = opw_kinematics
+	url = git@github.com:Jmeyer1292/opw_kinematics.git
