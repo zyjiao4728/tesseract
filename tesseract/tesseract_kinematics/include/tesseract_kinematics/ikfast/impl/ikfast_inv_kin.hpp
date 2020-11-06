@@ -52,6 +52,8 @@ bool IKFastInvKin::calcInvKin(Eigen::VectorXd& solutions,
                               const Eigen::Isometry3d& pose,
                               const Eigen::Ref<const Eigen::VectorXd>& seed) const
 {
+  std::cout << "ikfast" << std::endl;
+
   // Convert to ikfast data type
   Eigen::Transform<IkReal, 3, Eigen::Isometry> ikfast_tcp = pose.cast<IkReal>();
 

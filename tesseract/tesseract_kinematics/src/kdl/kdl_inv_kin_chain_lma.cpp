@@ -78,6 +78,7 @@ bool KDLInvKinChainLMA::calcInvKinHelper(Eigen::VectorXd& solutions,
 #else
     CONSOLE_BRIDGE_logDebug("KDL LMA Failed to calculate IK");
 #endif
+    KDLToEigen(kdl_solution, solutions);
     return false;
   }
 

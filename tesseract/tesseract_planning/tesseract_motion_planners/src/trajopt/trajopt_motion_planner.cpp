@@ -208,6 +208,8 @@ bool TrajOptMotionPlanner::solve(PlannerResponse& response, std::vector<double>&
     return false;
   }
 
+  util::gLogLevel = util::LevelDebug;
+
   // Create optimizer
   sco::BasicTrustRegionSQP opt(config_->prob);
   opt.setParameters(config_->params);
@@ -264,7 +266,7 @@ bool TrajOptMotionPlanner::solve(PlannerResponse& response, std::vector<double>&
                                getTraj(opt.x(), config_->prob->GetVars()),
                                length,
                                tesseract_collision::ContactTestType::FIRST,
-                               false);
+                               true);
 
 
   // Send response

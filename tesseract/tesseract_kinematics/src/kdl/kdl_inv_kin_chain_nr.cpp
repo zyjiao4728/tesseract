@@ -85,6 +85,7 @@ bool KDLInvKinChainNR::calcInvKinHelper(Eigen::VectorXd& solutions,
     {
       CONSOLE_BRIDGE_logDebug("KDL NR Failed to calculate IK");
     }
+    KDLToEigen(kdl_solution, solutions);
     return false;
   }
 
