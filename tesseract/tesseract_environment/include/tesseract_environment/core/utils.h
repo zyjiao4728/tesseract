@@ -88,7 +88,7 @@ checkTrajectorySegment(std::vector<tesseract_collision::ContactResultMap>& conta
                        tesseract_collision::ContinuousContactManager& manager,
                        const tesseract_environment::EnvState::Ptr& state0,
                        const tesseract_environment::EnvState::Ptr& state1,
-                       tesseract_collision::ContactTestType type = tesseract_collision::ContactTestType::FIRST,
+                       tesseract_collision::ContactTestType type = tesseract_collision::ContactTestType::ALL,
                        bool verbose = false)
 {
   for (const auto& link_name : manager.getActiveCollisionObjects())
@@ -97,6 +97,7 @@ checkTrajectorySegment(std::vector<tesseract_collision::ContactResultMap>& conta
   tesseract_collision::ContactResultMap collisions;
   manager.contactTest(collisions, type);
 
+  bool collide_with_margin = false;
   if (!collisions.empty())
   {
     if (verbose)
@@ -104,18 +105,19 @@ checkTrajectorySegment(std::vector<tesseract_collision::ContactResultMap>& conta
       for (auto& collision : collisions)
       {
         std::stringstream ss;
-        ss << "Continuous collision detected between '" << collision.first.first << "' and '" << collision.first.second
+        if (abs(collision.second.front().distance) > 1e-2)
+        {
+          ss << "Continuous collision detected between '" << collision.first.first << "' and '" << collision.first.second
            << "' with distance " << collision.second.front().distance << std::endl;
-
+          collide_with_margin = true;
+        }
         CONSOLE_BRIDGE_logError(ss.str().c_str());
       }
     }
-
-    contacts.push_back(collisions);
-    return true;
+    return collide_with_margin;
   }
 
-  return false;
+  return collide_with_margin;
 }
 
 /**
@@ -233,7 +235,7 @@ inline bool checkTrajectory(std::vector<tesseract_collision::ContactResultMap>& 
                             const std::vector<std::string>& joint_names,
                             const tesseract_common::TrajArray& traj,
                             double longest_valid_segment_length,
-                            tesseract_collision::ContactTestType type = tesseract_collision::ContactTestType::FIRST,
+                            tesseract_collision::ContactTestType type = tesseract_collision::ContactTestType::ALL,
                             bool verbose = false)
 {
   bool found = false;

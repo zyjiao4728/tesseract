@@ -277,11 +277,11 @@ bool TrajOptMotionPlanner::solve(PlannerResponse& response, std::vector<double>&
     response.status =
         tesseract_common::StatusCode(TrajOptMotionPlannerStatusCategory::FailedToFindValidSolution, status_category_);
   }
-  // else if (found)
-  // {
-  //   response.status = tesseract_common::StatusCode(TrajOptMotionPlannerStatusCategory::FoundValidSolutionInCollision,
-  //                                                  status_category_);
-  // }
+  else if (found)
+  {
+    response.status = tesseract_common::StatusCode(TrajOptMotionPlannerStatusCategory::FoundValidSolutionInCollision,
+                                                   status_category_);
+  }
   else
   {
     response.status = tesseract_common::StatusCode(TrajOptMotionPlannerStatusCategory::SolutionFound, status_category_);
