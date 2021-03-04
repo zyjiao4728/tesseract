@@ -172,7 +172,7 @@ tesseract_common::StatusCode TrajOptMotionPlanner::solve(PlannerResponse& respon
                                config_->prob->GetKin()->getJointNames(),
                                getTraj(opt.x(), config_->prob->GetVars()),
                                length,
-                               tesseract_collision::ContactTestType::FIRST,
+                               tesseract_collision::ContactTestType::ALL,
                                verbose);
 
   // Send response
@@ -265,7 +265,7 @@ bool TrajOptMotionPlanner::solve(PlannerResponse& response, std::vector<double>&
                                config_->prob->GetKin()->getJointNames(),
                                getTraj(opt.x(), config_->prob->GetVars()),
                                length,
-                               tesseract_collision::ContactTestType::FIRST,
+                               tesseract_collision::ContactTestType::ALL,
                                true);
 
 

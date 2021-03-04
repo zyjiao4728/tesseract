@@ -110,8 +110,8 @@ checkTrajectorySegment(std::vector<tesseract_collision::ContactResultMap>& conta
           ss << "Continuous collision detected between '" << collision.first.first << "' and '" << collision.first.second
            << "' with distance " << collision.second.front().distance << std::endl;
           collide_with_margin = true;
+          CONSOLE_BRIDGE_logError(ss.str().c_str());
         }
-        CONSOLE_BRIDGE_logError(ss.str().c_str());
       }
     }
     return collide_with_margin;
@@ -133,7 +133,7 @@ inline bool
 checkTrajectoryState(std::vector<tesseract_collision::ContactResultMap>& contacts,
                      tesseract_collision::DiscreteContactManager& manager,
                      const tesseract_environment::EnvState::Ptr& state,
-                     tesseract_collision::ContactTestType type = tesseract_collision::ContactTestType::FIRST,
+                     tesseract_collision::ContactTestType type = tesseract_collision::ContactTestType::ALL,
                      bool verbose = false)
 {
   tesseract_collision::ContactResultMap collisions;
@@ -143,6 +143,7 @@ checkTrajectoryState(std::vector<tesseract_collision::ContactResultMap>& contact
 
   manager.contactTest(collisions, type);
 
+  bool collide_with_margin = false;
   if (!collisions.empty())
   {
     if (verbose)
@@ -150,18 +151,19 @@ checkTrajectoryState(std::vector<tesseract_collision::ContactResultMap>& contact
       for (auto& collision : collisions)
       {
         std::stringstream ss;
-        ss << "Discrete collision detected between '" << collision.first.first << "' and '" << collision.first.second
+        if (abs(collision.second.front().distance) > 1e-2)
+        {
+          ss << "Continuous collision detected between '" << collision.first.first << "' and '" << collision.first.second
            << "' with distance " << collision.second.front().distance << std::endl;
-
-        CONSOLE_BRIDGE_logError(ss.str().c_str());
+          collide_with_margin = true;
+          CONSOLE_BRIDGE_logError(ss.str().c_str());
+        }
       }
     }
-
-    contacts.push_back(collisions);
-    return true;
+    return collide_with_margin;
   }
 
-  return false;
+  return collide_with_margin;
 }
 
 /**
